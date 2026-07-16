@@ -1,6 +1,7 @@
 package me.almana.modern_f3.mixin;
 
 import me.almana.modern_f3.client.ClientEvents;
+import me.almana.modern_f3.client.Compat;
 import me.almana.modern_f3.debug.overlay.DebugOverlay;
 import net.minecraft.client.KeyboardHandler;
 import net.minecraft.client.Minecraft;
@@ -15,12 +16,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class KeyboardHandlerMixin {
     @Inject(method = "keyPress", at = @At("HEAD"), cancellable = true)
     private void onKeyPress(long windowPointer, int action, KeyEvent event, CallbackInfo ci) {
-        if (!DebugOverlay.TOGGLE_KEY.isDefault()) return;
-        if (event.key() != GLFW.GLFW_KEY_F3 || action != GLFW.GLFW_PRESS) return;
-
         Minecraft mc = Minecraft.getInstance();
-        DebugOverlay.get().toggle();
-        ClientEvents.showKeybindHintOnce(mc);
+        if (Compat.screen(mc) != null) return;
+        if (!DebugOverlay.TOGGLE_KEY.matches(event)) return;
+
+        if (action == GLFW.GLFW_PRESS) {
+            DebugOverlay.get().toggle();
+            ClientEvents.showKeybindHintOnce(mc);
+        }
         ci.cancel();
     }
 }

@@ -5,6 +5,7 @@ import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
+import me.almana.modern_f3.client.Compat;
 import me.almana.modern_f3.debug.config.OverlayConfig;
 import me.almana.modern_f3.debug.overlay.DebugOverlay;
 import me.almana.modern_f3.debug.overlay.OverlayModule;
@@ -232,7 +233,7 @@ public class ModuleEditScreen extends Screen {
             rebuildWidgets();
             return;
         }
-        minecraft.setScreen(parent);
+        Compat.setScreen(minecraft, parent);
     }
 
     @Override
@@ -380,6 +381,7 @@ public class ModuleEditScreen extends Screen {
         EditBox input = new EditBox(font, x, y, width, BUTTON_HEIGHT, narration);
         input.setMaxLength(7);
         input.setHint(Component.translatable("screen.modern_f3.module_editor.color_hint"));
+        //? if neoforge
         input.setFilter(value -> value.matches("#?[0-9a-fA-F]{0,6}"));
         input.setResponder(responder);
         return input;
@@ -402,9 +404,7 @@ public class ModuleEditScreen extends Screen {
     }
 
     private Button compactButton(Component message, int x, int y, int width, Button.OnPress onPress) {
-        return Button.builder(message, onPress)
-            .bounds(x, y, width, BUTTON_HEIGHT)
-            .build(CompactButton::new);
+        return new CompactButton(x, y, width, BUTTON_HEIGHT, message, onPress);
     }
 
     private float activeHue() {
@@ -723,8 +723,8 @@ public class ModuleEditScreen extends Screen {
     }
 
     private class CompactButton extends Button {
-        protected CompactButton(Button.Builder builder) {
-            super(builder);
+        protected CompactButton(int x, int y, int width, int height, Component message, Button.OnPress onPress) {
+            super(x, y, width, height, message, onPress, DEFAULT_NARRATION);
         }
 
         @Override

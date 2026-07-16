@@ -6,6 +6,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import me.almana.modern_f3.debug.overlay.DebugOverlay;
 import me.almana.modern_f3.debug.overlay.OverlayModule;
+//? if neoforge
 import net.neoforged.fml.loading.FMLPaths;
 import org.slf4j.Logger;
 
@@ -21,7 +22,11 @@ public class OverlayConfig {
 
     private static Path path() {
         if (configPath == null) {
+            //? if neoforge {
             configPath = FMLPaths.CONFIGDIR.get().resolve("modern_f3").resolve("overlay.json");
+            //?} else {
+            /*configPath = net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir().resolve("modern_f3").resolve("overlay.json");
+            *///?}
         }
         return configPath;
     }

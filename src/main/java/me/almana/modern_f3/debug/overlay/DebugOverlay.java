@@ -2,6 +2,7 @@ package me.almana.modern_f3.debug.overlay;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import me.almana.modern_f3.ModernF3;
+import me.almana.modern_f3.client.Compat;
 import me.almana.modern_f3.api.ModernF3Api;
 import me.almana.modern_f3.debug.config.OverlayConfig;
 import me.almana.modern_f3.debug.config.OverlayProfiles;
@@ -11,6 +12,7 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.resources.Identifier;
+//? if neoforge
 import net.neoforged.neoforge.client.settings.KeyConflictContext;
 import org.lwjgl.glfw.GLFW;
 
@@ -32,12 +34,20 @@ public class DebugOverlay {
         Identifier.fromNamespaceAndPath(ModernF3.MODID, "modern_f3")
     );
 
+    //? if neoforge {
     public static final KeyMapping TOGGLE_KEY = new KeyMapping(
         "key.modern_f3.toggle_overlay",
         KeyConflictContext.IN_GAME,
         InputConstants.Type.KEYSYM.getOrCreate(GLFW.GLFW_KEY_F3),
         CATEGORY
     );
+    //?} else {
+    /*public static final KeyMapping TOGGLE_KEY = new KeyMapping(
+        "key.modern_f3.toggle_overlay",
+        InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_F3,
+        CATEGORY
+    );
+    *///?}
 
     public static final KeyMapping EDIT_KEY = new KeyMapping(
         "key.modern_f3.edit_overlay",
@@ -100,7 +110,7 @@ public class DebugOverlay {
     }
 
     public void renderLayer(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
-        if (!visible || editMode || Minecraft.getInstance().screen != null) return;
+        if (!visible || editMode || Compat.screen(Minecraft.getInstance()) != null) return;
         float partial = deltaTracker.getGameTimeDeltaPartialTick(true);
         renderModules(graphics, partial);
     }

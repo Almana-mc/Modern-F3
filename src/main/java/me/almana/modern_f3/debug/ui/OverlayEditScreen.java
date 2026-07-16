@@ -1,6 +1,7 @@
 package me.almana.modern_f3.debug.ui;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import me.almana.modern_f3.client.Compat;
 import me.almana.modern_f3.debug.config.OverlayConfig;
 import me.almana.modern_f3.debug.config.OverlayProfiles;
 import me.almana.modern_f3.debug.overlay.DebugOverlay;
@@ -62,7 +63,7 @@ public class OverlayEditScreen extends Screen {
         startX += PROFILE_BUTTON_WIDTH + gap;
         addRenderableWidget(compactButton(NEW_PROFILE, startX, btnY, SMALL_BUTTON_WIDTH, btn -> {
             profileMenuOpen = false;
-            minecraft.setScreen(new ProfileCreateScreen(this));
+            Compat.setScreen(minecraft, new ProfileCreateScreen(this));
         }));
         startX += SMALL_BUTTON_WIDTH + gap;
         addRenderableWidget(compactButton(RESET, startX, btnY, SMALL_BUTTON_WIDTH, btn -> resetLayout()));
@@ -184,7 +185,7 @@ public class OverlayEditScreen extends Screen {
                     return true;
                 }
                 if (event.button() == 1) {
-                    minecraft.setScreen(new ModuleEditScreen(this, m));
+                    Compat.setScreen(minecraft, new ModuleEditScreen(this, m));
                     return true;
                 }
             }
@@ -300,9 +301,7 @@ public class OverlayEditScreen extends Screen {
     }
 
     private Button compactButton(Component message, int x, int y, int width, Button.OnPress onPress) {
-        return Button.builder(message, onPress)
-            .bounds(x, y, width, BUTTON_HEIGHT)
-            .build(CompactButton::new);
+        return new CompactButton(x, y, width, BUTTON_HEIGHT, message, onPress);
     }
 
     private boolean isShiftDown() {
@@ -322,8 +321,8 @@ public class OverlayEditScreen extends Screen {
     }
 
     private class CompactButton extends Button {
-        protected CompactButton(Button.Builder builder) {
-            super(builder);
+        protected CompactButton(int x, int y, int width, int height, Component message, Button.OnPress onPress) {
+            super(x, y, width, height, message, onPress, DEFAULT_NARRATION);
         }
 
         @Override

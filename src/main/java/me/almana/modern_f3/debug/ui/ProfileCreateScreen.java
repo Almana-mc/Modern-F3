@@ -1,5 +1,6 @@
 package me.almana.modern_f3.debug.ui;
 
+import me.almana.modern_f3.client.Compat;
 import me.almana.modern_f3.debug.config.OverlayProfiles;
 import me.almana.modern_f3.debug.overlay.DebugOverlay;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -93,7 +94,7 @@ public class ProfileCreateScreen extends Screen {
 
     @Override
     public void onClose() {
-        minecraft.setScreen(parent);
+        Compat.setScreen(minecraft, parent);
     }
 
     @Override
@@ -103,7 +104,7 @@ public class ProfileCreateScreen extends Screen {
 
     private void createProfile() {
         OverlayProfiles.createProfile(overlay, nameInput.getValue());
-        minecraft.setScreen(parent);
+        Compat.setScreen(minecraft, parent);
     }
 
     private void updateCreateButton() {

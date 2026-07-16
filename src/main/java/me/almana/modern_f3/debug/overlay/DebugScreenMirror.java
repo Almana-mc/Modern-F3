@@ -1,5 +1,6 @@
 package me.almana.modern_f3.debug.overlay;
 
+import me.almana.modern_f3.client.Compat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.debug.DebugScreenDisplayer;
 import net.minecraft.client.gui.components.debug.DebugScreenEntries;
@@ -14,11 +15,10 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import org.jspecify.annotations.Nullable;
 
-import net.neoforged.neoforge.common.CommonHooks;
-
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +27,10 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 public class DebugScreenMirror {
+    private static final Comparator<Identifier> VANILLA_FIRST =
+        Comparator.<Identifier, Boolean>comparing(id -> !id.getNamespace().equals("minecraft"))
+            .thenComparing(Identifier::toString);
+
     private final Minecraft minecraft = Minecraft.getInstance();
 
     private @Nullable ChunkPos lastPos;
@@ -48,11 +52,11 @@ public class DebugScreenMirror {
     }
 
     private void rebuild() {
-        long guiTick = minecraft.gui.getGuiTicks();
+        long guiTick = Compat.guiTicks(minecraft);
         if (buildTick == guiTick) return;
         buildTick = guiTick;
 
-        if (!minecraft.isGameLoadFinished() || minecraft.options.hideGui && minecraft.screen == null) {
+        if (!minecraft.isGameLoadFinished() || Compat.hudHidden(minecraft) && Compat.screen(minecraft) == null) {
             cachedFull = Snapshot.EMPTY;
             cachedFiltered = Snapshot.EMPTY;
             return;
@@ -64,7 +68,7 @@ public class DebugScreenMirror {
         Level level = getLevel();
 
         List<Identifier> allIds = new ArrayList<>(DebugScreenEntries.allEntries().keySet());
-        allIds.sort(CommonHooks.CMP_BY_NAMESPACE_VANILLA_FIRST);
+        allIds.sort(VANILLA_FIRST);
 
         if (editMode) {
             cachedFull = buildSnapshot(allIds, reduced, level, true);

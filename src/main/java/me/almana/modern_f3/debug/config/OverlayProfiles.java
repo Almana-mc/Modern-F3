@@ -8,6 +8,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import me.almana.modern_f3.debug.overlay.DebugOverlay;
 import net.minecraft.network.chat.Component;
+//? if neoforge
 import net.neoforged.fml.loading.FMLPaths;
 import org.slf4j.Logger;
 
@@ -34,7 +35,11 @@ public class OverlayProfiles {
 
     private static Path path() {
         if (configPath == null) {
+            //? if neoforge {
             configPath = FMLPaths.CONFIGDIR.get().resolve("modern_f3").resolve("profiles.json");
+            //?} else {
+            /*configPath = net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir().resolve("modern_f3").resolve("profiles.json");
+            *///?}
         }
         return configPath;
     }
