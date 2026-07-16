@@ -4,27 +4,27 @@ on:
   workflow_dispatch:
     inputs:
       publish_discord:
-        description: "Send Discord notification"
+        description: Send Discord notification
         required: true
         type: boolean
         default: true
       publish_github:
-        description: "Publish to GitHub Releases"
+        description: Publish to GitHub Releases
         required: true
         type: boolean
         default: true
       publish_curseforge:
-        description: "Publish to CurseForge"
+        description: Publish to CurseForge
         required: true
         type: boolean
         default: true
       publish_modrinth:
-        description: "Publish to Modrinth"
+        description: Publish to Modrinth
         required: true
         type: boolean
         default: true
       confirm:
-        description: "Type RELEASE to confirm"
+        description: Type RELEASE to confirm
         required: true
         type: string
 
@@ -36,120 +36,62 @@ permissions:
   contents: read
 
 jobs:
-  validate-release:
-    name: Validate Release Target
+  prepare-release:
+    name: Prepare Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
-      is_version_branch: ${{ steps.branch_check.outputs.is_version_branch }}
-      target_branch: ${{ steps.branch_check.outputs.target_branch }}
-      publish_discord: ${{ steps.branch_check.outputs.publish_discord }}
-      publish_github: ${{ steps.branch_check.outputs.publish_github }}
-      publish_curseforge: ${{ steps.branch_check.outputs.publish_curseforge }}
-      publish_modrinth: ${{ steps.branch_check.outputs.publish_modrinth }}
+      matrix: ${{ steps.targets.outputs.matrix }}
+      mod_name: ${{ steps.metadata.outputs.mod_name }}
+      mod_version: ${{ steps.metadata.outputs.mod_version }}
+      java_version: ${{ steps.metadata.outputs.java_version }}
+      release_tags: ${{ steps.targets.outputs.release_tags }}
+      publish_discord: ${{ steps.inputs.outputs.publish_discord }}
+      publish_github: ${{ steps.inputs.outputs.publish_github }}
+      publish_curseforge: ${{ steps.inputs.outputs.publish_curseforge }}
+      publish_modrinth: ${{ steps.inputs.outputs.publish_modrinth }}
     steps:
-      - name: Resolve trigger inputs
-        id: branch_check
+      - name: Check confirmation
+        id: inputs
         shell: bash
         env:
-          TARGET_BRANCH: ${{ github.ref_name }}
-          INPUT_PUBLISH_DISCORD: ${{ inputs.publish_discord }}
-          INPUT_PUBLISH_GITHUB: ${{ inputs.publish_github }}
-          INPUT_PUBLISH_CURSEFORGE: ${{ inputs.publish_curseforge }}
-          INPUT_PUBLISH_MODRINTH: ${{ inputs.publish_modrinth }}
-          INPUT_CONFIRM: ${{ inputs.confirm }}
+          CONFIRM: ${{ inputs.confirm }}
+          PUBLISH_DISCORD: ${{ inputs.publish_discord }}
+          PUBLISH_GITHUB: ${{ inputs.publish_github }}
+          PUBLISH_CURSEFORGE: ${{ inputs.publish_curseforge }}
+          PUBLISH_MODRINTH: ${{ inputs.publish_modrinth }}
         run: |
-          target="$TARGET_BRANCH"
-          publish_discord="$INPUT_PUBLISH_DISCORD"
-          publish_github="$INPUT_PUBLISH_GITHUB"
-          publish_curseforge="$INPUT_PUBLISH_CURSEFORGE"
-          publish_modrinth="$INPUT_PUBLISH_MODRINTH"
-
-          if [[ "$INPUT_CONFIRM" != "RELEASE" ]]; then
+          if [[ "$CONFIRM" != "RELEASE" ]]; then
             echo "Manual confirmation failed. Type RELEASE in the confirm input."
             exit 1
           fi
 
-          # Accept branch names like 26.1, 1.21.1, 1.20.2, etc.
-          if [[ "$target" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-            echo "is_version_branch=true" >> "$GITHUB_OUTPUT"
-            echo "Release target branch '$target' accepted."
-          else
-            echo "is_version_branch=false" >> "$GITHUB_OUTPUT"
-            echo "Release target branch '$target' is not a version branch. Workflow will skip."
-          fi
+          echo "publish_discord=$PUBLISH_DISCORD" >> "$GITHUB_OUTPUT"
+          echo "publish_github=$PUBLISH_GITHUB" >> "$GITHUB_OUTPUT"
+          echo "publish_curseforge=$PUBLISH_CURSEFORGE" >> "$GITHUB_OUTPUT"
+          echo "publish_modrinth=$PUBLISH_MODRINTH" >> "$GITHUB_OUTPUT"
 
-          echo "target_branch=$target" >> "$GITHUB_OUTPUT"
-          echo "publish_discord=$publish_discord" >> "$GITHUB_OUTPUT"
-          echo "publish_github=$publish_github" >> "$GITHUB_OUTPUT"
-          echo "publish_curseforge=$publish_curseforge" >> "$GITHUB_OUTPUT"
-          echo "publish_modrinth=$publish_modrinth" >> "$GITHUB_OUTPUT"
-
-  build:
-    name: Build
-    needs: validate-release
-    if: needs.validate-release.outputs.is_version_branch == 'true'
-    runs-on: ubuntu-latest
-    outputs:
-      minecraft_version: ${{ steps.meta.outputs.minecraft_version }}
-      mod_version: ${{ steps.meta.outputs.mod_version }}
-      mod_name: ${{ steps.meta.outputs.mod_name }}
-      release_tag: ${{ steps.meta.outputs.release_tag }}
-      changelog: ${{ steps.meta.outputs.changelog }}
-      java_version: ${{ steps.meta.outputs.java_version }}
-      loader: ${{ steps.meta.outputs.loader }}
-
-    steps:
-      - name: Checkout target branch
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.ref }}
 
       - name: Read project metadata
-        id: meta
+        id: metadata
         shell: bash
         run: |
-          minecraft_version="$(awk -F= '/^minecraft_version=/{print $2}' gradle.properties | tr -d '\r')"
-          mod_version="$(awk -F= '/^mod_version=/{print $2}' gradle.properties | tr -d '\r')"
           mod_name="$(awk -F= '/^mod_name=/{print $2}' gradle.properties | tr -d '\r')"
-          release_tag="${minecraft_version}-${mod_version}"
-          changelog_file="CHANGELOGS/${release_tag}.md"
+          mod_version="$(awk -F= '/^mod_version=/{print $2}' gradle.properties | tr -d '\r')"
           java_version="$(grep -roE 'JavaLanguageVersion\.of\([0-9]+\)' build.gradle build.gradle.kts 2>/dev/null | head -n1 | grep -oE '[0-9]+' || true)"
 
-          if [[ -z "$java_version" ]]; then
-            java_version="21"
-          fi
-
-          if [[ ! -f "$changelog_file" ]]; then
-            echo "Missing changelog file: $changelog_file"
-            exit 1
-          fi
-
-          if grep -qE "id[( ]['\"]net\.neoforged\.moddev['\"]" build.gradle build.gradle.kts 2>/dev/null; then
-            loader="neoforge"
-          elif grep -qE "id[( ]['\"]net\.minecraftforge\.gradle['\"]" build.gradle build.gradle.kts 2>/dev/null; then
-            loader="forge"
-          else
-            loader="neoforge"
-          fi
-
-          echo "minecraft_version=$minecraft_version" >> "$GITHUB_OUTPUT"
-          echo "mod_version=$mod_version" >> "$GITHUB_OUTPUT"
           echo "mod_name=$mod_name" >> "$GITHUB_OUTPUT"
-          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
-          echo "java_version=$java_version" >> "$GITHUB_OUTPUT"
-          echo "loader=$loader" >> "$GITHUB_OUTPUT"
-          {
-            echo "changelog<<EOF"
-            cat "$changelog_file"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          echo "mod_version=$mod_version" >> "$GITHUB_OUTPUT"
+          echo "java_version=${java_version:-21}" >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: ${{ steps.meta.outputs.java_version }}
+          java-version: ${{ steps.metadata.outputs.java_version }}
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -157,267 +99,133 @@ jobs:
       - name: Ensure gradlew is executable
         run: chmod +x ./gradlew
 
-      - name: Build
+      - name: Discover Stonecutter targets
+        id: targets
         shell: bash
-        run: |
-          exclude_args=()
-          copy_task="$(./gradlew tasks --all --console=plain | grep -oEi '^copy[Jj]ar\b' | head -n1 || true)"
-          if [[ -n "$copy_task" ]]; then
-            exclude_args=(-x "$copy_task")
-          fi
-
-          ./gradlew clean build "${exclude_args[@]}" --console=plain
         env:
-          CI: true
-          BUILD_VERSION: ${{ steps.meta.outputs.release_tag }}
-          CHANGELOG: ${{ steps.meta.outputs.changelog }}
-          PUBLISH: true
+          MOD_VERSION: ${{ steps.metadata.outputs.mod_version }}
+        run: |
+          projects="$(./gradlew -Dorg.gradle.java.home="$JAVA_HOME" projects --console=plain -q 2>&1)"
+          matrix="$(python3 -c '
+          import json
+          import os
+          import re
+          import sys
+          from collections import defaultdict
+          from pathlib import Path
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-build
-          path: build/libs/*.jar
+          targets = defaultdict(list)
+          for name in set(re.findall(r"Project \x27:([^\x27]+)\x27", sys.stdin.read())):
+              match = re.fullmatch(r"(\d+(?:\.\d+)+)-([a-z0-9]+)", name)
+              if match:
+                  targets[match.group(1)].append((name, match.group(2)))
 
-  publish-github:
-    name: Publish to GitHub Releases
-    needs: [validate-release, build]
-    if: needs.build.result == 'success' && needs.validate-release.outputs.publish_github == 'true'
+          if not targets:
+              raise SystemExit("No Stonecutter version projects were found.")
+
+          mod_version = os.environ["MOD_VERSION"]
+          releases = []
+          for minecraft_version, projects in sorted(targets.items()):
+              projects.sort()
+              release_version = minecraft_version.rsplit(".", 1)[0] if minecraft_version.count(".") > 1 else minecraft_version
+              preferred_changelog = Path(f"CHANGELOGS/{release_version}-{mod_version}.md")
+              changelogs = sorted(Path("CHANGELOGS").glob(f"*-{mod_version}.md"))
+              if preferred_changelog.exists():
+                  changelog = preferred_changelog
+              elif len(changelogs) == 1:
+                  changelog = changelogs[0]
+              else:
+                  raise SystemExit(f"Missing changelog for Minecraft {minecraft_version}. Add {preferred_changelog} or one shared *-{mod_version}.md file.")
+
+              releases.append({
+                  "minecraft_version": minecraft_version,
+                  "release_tag": f"{minecraft_version}-{mod_version}",
+                  "build_tasks": " ".join(f":{project}:build" for project, _ in projects),
+                  "loaders": "\\n".join(loader for _, loader in projects),
+                  "changelog_file": str(changelog),
+              })
+
+          print(json.dumps({"include": releases}, separators=(",", ":")))
+          ' <<< "$projects")"
+
+          release_tags="$(python3 -c 'import json, sys; print(", ".join(item["release_tag"] for item in json.load(sys.stdin)["include"]))' <<< "$matrix")"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "release_tags=$release_tags" >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Release ${{ matrix.minecraft_version }}
+    needs: prepare-release
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    outputs:
-      release_url: ${{ steps.github_release.outputs.url }}
-
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare-release.outputs.matrix) }}
     steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
         with:
-          name: release-build
-          path: build/libs
+          distribution: temurin
+          java-version: ${{ needs.prepare-release.outputs.java_version }}
 
-      - name: Publish to GitHub Releases
-        id: github_release
-        uses: softprops/action-gh-release@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: ${{ needs.build.outputs.release_tag }}
-          target_commitish: ${{ github.sha }}
-          name: ${{ needs.build.outputs.mod_name }} - ${{ needs.build.outputs.release_tag }}
-          body: ${{ needs.build.outputs.changelog }}
-          files: build/libs/*.jar
-          fail_on_unmatched_files: true
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
 
-  publish-curseforge:
-    name: Publish to CurseForge
-    needs: [validate-release, build]
-    if: needs.build.result == 'success' && needs.validate-release.outputs.publish_curseforge == 'true' && vars.CURSEFORGE_PROJECT_ID != ''
-    runs-on: ubuntu-latest
-    env:
-      CURSEFORGE_TOKEN: ${{ secrets.TOKEN_CURSEFORGE }}
-    outputs:
-      release_url: ${{ steps.curseforge_publish.outputs.curseforge-url }}
+      - name: Ensure gradlew is executable
+        run: chmod +x ./gradlew
 
-    steps:
-      - name: Validate CurseForge config
-        id: curseforge_config
+      - name: Build configured targets
         shell: bash
-        run: |
-          if [[ -z "$CURSEFORGE_TOKEN" ]]; then
-            echo "CurseForge token is not configured. Skipping publish."
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          fi
+        env:
+          BUILD_TASKS: ${{ matrix.build_tasks }}
+        run: ./gradlew -Dorg.gradle.java.home="$JAVA_HOME" $BUILD_TASKS -x copyjar --console=plain
 
-      - name: Download artifacts
-        if: steps.curseforge_config.outputs.enabled == 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: release-build
-          path: build/libs
-
-      - name: Publish to CurseForge
-        if: steps.curseforge_config.outputs.enabled == 'true'
-        id: curseforge_publish
+      - name: Publish release
+        id: publish
         uses: Kira-NT/mc-publish@v3.3.0
         with:
-          name: ${{ needs.build.outputs.mod_name }} - ${{ needs.build.outputs.release_tag }}
-          version: ${{ needs.build.outputs.release_tag }}
-          files: build/libs/*.jar
-          changelog: ${{ needs.build.outputs.changelog }}
-          loaders: ${{ needs.build.outputs.loader }}
-          game-versions: ${{ needs.build.outputs.minecraft_version }}
-          java: ${{ needs.build.outputs.java_version }}
-          curseforge-id: ${{ vars.CURSEFORGE_PROJECT_ID }}
-          curseforge-token: ${{ env.CURSEFORGE_TOKEN }}
-
-  publish-modrinth:
-    name: Publish to Modrinth
-    needs: [validate-release, build]
-    if: needs.build.result == 'success' && needs.validate-release.outputs.publish_modrinth == 'true' && vars.MODRINTH_PROJECT_ID != ''
-    runs-on: ubuntu-latest
-    env:
-      MODRINTH_TOKEN: ${{ secrets.TOKEN_MODRINTH }}
-    outputs:
-      release_url: ${{ steps.modrinth_publish.outputs.modrinth-url }}
-
-    steps:
-      - name: Validate Modrinth config
-        id: modrinth_config
-        shell: bash
-        run: |
-          if [[ -z "$MODRINTH_TOKEN" ]]; then
-            echo "Modrinth token is not configured. Skipping publish."
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Download artifacts
-        if: steps.modrinth_config.outputs.enabled == 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: release-build
-          path: build/libs
-
-      - name: Publish to Modrinth
-        if: steps.modrinth_config.outputs.enabled == 'true'
-        id: modrinth_publish
-        uses: Kira-NT/mc-publish@v3.3.0
-        with:
-          name: ${{ needs.build.outputs.mod_name }} - ${{ needs.build.outputs.release_tag }}
-          version: ${{ needs.build.outputs.release_tag }}
-          files: build/libs/*.jar
-          changelog: ${{ needs.build.outputs.changelog }}
-          loaders: ${{ needs.build.outputs.loader }}
-          game-versions: ${{ needs.build.outputs.minecraft_version }}
-          java: ${{ needs.build.outputs.java_version }}
-          modrinth-id: ${{ vars.MODRINTH_PROJECT_ID }}
-          modrinth-token: ${{ env.MODRINTH_TOKEN }}
+          name: ${{ needs.prepare-release.outputs.mod_name }} - ${{ matrix.release_tag }}
+          version: ${{ matrix.release_tag }}
+          files: versions/${{ matrix.minecraft_version }}-*/build/libs/*.jar
+          changelog-file: ${{ matrix.changelog_file }}
+          loaders: ${{ matrix.loaders }}
+          game-versions: ${{ matrix.minecraft_version }}
+          game-version-filter: none
+          java: ${{ needs.prepare-release.outputs.java_version }}
+          github-token: ${{ needs.prepare-release.outputs.publish_github == 'true' && secrets.GITHUB_TOKEN || '' }}
+          github-tag: ${{ matrix.release_tag }}
+          github-commitish: ${{ github.sha }}
+          modrinth-id: ${{ needs.prepare-release.outputs.publish_modrinth == 'true' && vars.MODRINTH_PROJECT_ID || '' }}
+          modrinth-token: ${{ needs.prepare-release.outputs.publish_modrinth == 'true' && secrets.TOKEN_MODRINTH || '' }}
+          curseforge-id: ${{ needs.prepare-release.outputs.publish_curseforge == 'true' && vars.CURSEFORGE_PROJECT_ID || '' }}
+          curseforge-token: ${{ needs.prepare-release.outputs.publish_curseforge == 'true' && secrets.TOKEN_CURSEFORGE || '' }}
 
   notify-discord:
     name: Notify Discord
-    needs: [validate-release, build, publish-github, publish-curseforge, publish-modrinth]
-    if: always() && needs.validate-release.outputs.is_version_branch == 'true' && needs.validate-release.outputs.publish_discord == 'true' && needs.build.result == 'success'
+    needs: [prepare-release, release]
+    if: always() && needs.prepare-release.outputs.publish_discord == 'true' && needs.release.result == 'success'
     runs-on: ubuntu-latest
     env:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
       DISCORD_ROLE_ID: ${{ vars.DISCORD_RELEASE_ROLE_ID }}
-      TARGET_BRANCH: ${{ needs.validate-release.outputs.target_branch }}
-      MINECRAFT_VERSION: ${{ needs.build.outputs.minecraft_version }}
-      MOD_VERSION: ${{ needs.build.outputs.mod_version }}
-      RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
-      MOD_NAME: ${{ needs.build.outputs.mod_name }}
-      CHANGELOG: ${{ needs.build.outputs.changelog }}
-      BUILD_RESULT: ${{ needs.build.result }}
-      GITHUB_RESULT: ${{ needs.publish-github.result }}
-      GITHUB_URL: ${{ needs.publish-github.outputs.release_url }}
-      CURSEFORGE_RESULT: ${{ needs.publish-curseforge.result }}
-      CURSEFORGE_URL: ${{ needs.publish-curseforge.outputs.release_url }}
-      MODRINTH_RESULT: ${{ needs.publish-modrinth.result }}
-      MODRINTH_URL: ${{ needs.publish-modrinth.outputs.release_url }}
-      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-      ACTOR: ${{ github.actor }}
-      REPOSITORY: ${{ github.repository }}
-
+      MOD_NAME: ${{ needs.prepare-release.outputs.mod_name }}
+      RELEASE_TAGS: ${{ needs.prepare-release.outputs.release_tags }}
+      RELEASES_URL: ${{ github.server_url }}/${{ github.repository }}/releases
     steps:
-      - name: Validate Discord config
-        id: discord_config
+      - name: Send Discord notification
         shell: bash
         run: |
           if [[ -z "$DISCORD_WEBHOOK_URL" ]]; then
-            echo "Discord webhook is not configured. Skipping notification."
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
-      - name: Send Discord notification
-        if: steps.discord_config.outputs.enabled == 'true'
-        shell: bash
-        run: |
-          payload=$(python3 - <<'PY'
-          import json
-          import os
-
-          def link_line(label, url, result):
-              if url:
-                  return f"{label}: {url}"
-              if result == "skipped":
-                  return f"{label}: Skipped"
-              if result == "success":
-                  return f"{label}: Published"
-              if result == "failure":
-                  return f"{label}: Failed"
-              if result == "cancelled":
-                  return f"{label}: Cancelled"
-              return f"{label}: {result}"
-
-          role_id = os.environ.get("DISCORD_ROLE_ID", "").strip()
+          payload="$(python3 -c 'import json, os
+          role_id = os.environ["DISCORD_ROLE_ID"].strip()
           greeting = f"Hey <@&{role_id}>" if role_id else "Hey"
-          release_name = f"{os.environ['MOD_NAME']}-{os.environ['MINECRAFT_VERSION']}-{os.environ['MOD_VERSION']}"
+          content = "\n".join([greeting, "", "New {} release: {}".format(os.environ["MOD_NAME"], os.environ["RELEASE_TAGS"]), os.environ["RELEASES_URL"]])
+          print(json.dumps({"content": content, **({"allowed_mentions": {"parse": [], "roles": [role_id]}} if role_id else {})}))')"
 
-          lines = [
-              greeting,
-              "",
-              f"New release: {release_name}",
-              "## Changelog",
-              "",
-          ]
-
-          changelog = os.environ.get("CHANGELOG", "").strip()
-          if changelog:
-              lines.append(changelog)
-          else:
-              lines.append("No changelog provided.")
-
-          lines.extend([
-              "",
-              link_line("Curseforge", os.environ.get("CURSEFORGE_URL", "").strip(), os.environ.get("CURSEFORGE_RESULT", "").strip()),
-              link_line("Modrinth", os.environ.get("MODRINTH_URL", "").strip(), os.environ.get("MODRINTH_RESULT", "").strip()),
-              link_line("Github", os.environ.get("GITHUB_URL", "").strip(), os.environ.get("GITHUB_RESULT", "").strip()),
-              "",
-              "Thank you all for downloading,",
-              "AlmanaX21",
-          ])
-
-          content = "\n".join(lines)
-          if len(content) > 1900:
-              static_lines = [
-                  greeting,
-                  "",
-                  f"New release: {release_name}",
-                  "## Changelog",
-                  "",
-              ]
-              footer_lines = [
-                  "",
-                  link_line("Curseforge", os.environ.get("CURSEFORGE_URL", "").strip(), os.environ.get("CURSEFORGE_RESULT", "").strip()),
-                  link_line("Modrinth", os.environ.get("MODRINTH_URL", "").strip(), os.environ.get("MODRINTH_RESULT", "").strip()),
-                  link_line("Github", os.environ.get("GITHUB_URL", "").strip(), os.environ.get("GITHUB_RESULT", "").strip()),
-                  "",
-                  "Thank you all for downloading,",
-                  "AlmanaX21",
-              ]
-              static_prefix = "\n".join(static_lines)
-              static_suffix = "\n".join(footer_lines)
-              available = 1900 - len(static_prefix) - len(static_suffix) - len("\n...\n")
-              trimmed = changelog[:max(0, available)].rstrip()
-              content = "\n".join(static_lines + [trimmed, "..."] + footer_lines)
-
-          payload = {"content": content}
-          if role_id:
-              payload["allowed_mentions"] = {"parse": [], "roles": [role_id]}
-
-          print(json.dumps(payload))
-          PY
-          )
-
-          curl \
-            --fail \
-            --silent \
-            --show-error \
-            -H "Content-Type: application/json" \
-            -d "$payload" \
-            "$DISCORD_WEBHOOK_URL"
+          curl --fail --silent --show-error -H "Content-Type: application/json" -d "$payload" "$DISCORD_WEBHOOK_URL"
