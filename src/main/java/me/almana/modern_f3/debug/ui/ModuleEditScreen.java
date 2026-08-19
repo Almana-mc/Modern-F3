@@ -37,7 +37,6 @@ public class ModuleEditScreen extends Screen {
     private static final Component RESET = Component.translatable("button.modern_f3.reset");
     private static final int MAX_PICKER_HEIGHT = 116;
     private static final int MIN_PICKER_HEIGHT = 72;
-    private static final int PREVIEW_MIN_HEIGHT = 34;
     private static final int BUTTON_HEIGHT = 11;
     private static final int COLUMN_GAP = 10;
     private static final int ROW_GAP = 5;
@@ -83,61 +82,53 @@ public class ModuleEditScreen extends Screen {
     }
 
     private void initMain() {
-        int controlWidth = controlWidth();
+        module.tick();
+        module.updateSize();
+        ModuleEditorLayout layout = ModuleEditorLayout.calculate(width, module.getHeight());
+        int controlWidth = layout.controlWidth();
         int left = width / 2 - (controlWidth * 2 + COLUMN_GAP) / 2;
         int right = left + controlWidth + COLUMN_GAP;
-        int toggleY = previewBottom() + 8;
-        int targetY = toggleY + BUTTON_HEIGHT + ROW_GAP;
-        int sliderY = targetY + BUTTON_HEIGHT + ROW_GAP;
-        int actionY = sliderY + BUTTON_HEIGHT + ROW_GAP;
         int actionTotalWidth = ACTION_BUTTON_WIDTH * 3 + ROW_GAP * 2;
         int actionStartX = width / 2 - actionTotalWidth / 2;
 
-        addRenderableWidget(compactButton(enabledMessage(), left, toggleY, controlWidth, button -> {
+        addRenderableWidget(compactButton(enabledMessage(), left, layout.toggleY(), controlWidth, button -> {
             module.setEnabled(!module.isEnabled());
             button.setMessage(enabledMessage());
             OverlayConfig.save(overlay);
         }));
 
-        addRenderableWidget(compactButton(backgroundMessage(), right, toggleY, controlWidth, button -> {
+        addRenderableWidget(compactButton(backgroundMessage(), right, layout.toggleY(), controlWidth, button -> {
             module.setShowBackground(!module.showBackground());
             button.setMessage(backgroundMessage());
             OverlayConfig.save(overlay);
         }));
 
-        addRenderableWidget(compactButton(TEXT_COLOR, left, targetY, controlWidth, button -> {
+        addRenderableWidget(compactButton(TEXT_COLOR, left, layout.targetY(), controlWidth, button -> {
             activeColorTarget = ColorTarget.TEXT;
             colorPickerOpen = true;
             rebuildWidgets();
         }));
-        addRenderableWidget(compactButton(BACKGROUND_COLOR, right, targetY, controlWidth, button -> {
+        addRenderableWidget(compactButton(BACKGROUND_COLOR, right, layout.targetY(), controlWidth, button -> {
             activeColorTarget = ColorTarget.BACKGROUND;
             colorPickerOpen = true;
             rebuildWidgets();
         }));
 
         addRenderableWidget(new ValueSlider(
-            left, sliderY, controlWidth, "screen.modern_f3.module_editor.scale",
+            left, layout.sliderY(), controlWidth, layout.sliderHeight(), "screen.modern_f3.module_editor.scale",
             Math.round(module.getScale() * 100.0F), 50, 200,
-            value -> {
-                module.setScale(value / 100.0F);
-                OverlayConfig.save(overlay);
-                rebuildWidgets();
-            }
+            value -> module.setScale(value / 100.0F)
         ));
 
         addRenderableWidget(new ValueSlider(
-            right, sliderY, controlWidth, "screen.modern_f3.module_editor.background_opacity",
+            right, layout.sliderY(), controlWidth, layout.sliderHeight(), "screen.modern_f3.module_editor.background_opacity",
             Math.round(module.getBackgroundOpacity() * 100.0F / 255.0F), 100,
-            value -> {
-                module.setBackgroundOpacity(Math.round(value * 255.0F / 100.0F));
-                OverlayConfig.save(overlay);
-            }
+            value -> module.setBackgroundOpacity(Math.round(value * 255.0F / 100.0F))
         ));
 
-        addRenderableWidget(compactButton(COPY_STYLE, actionStartX, actionY, ACTION_BUTTON_WIDTH, button -> copyStyle()));
-        pasteHereButton = addRenderableWidget(compactButton(PASTE_HERE, actionStartX + ACTION_BUTTON_WIDTH + ROW_GAP, actionY, ACTION_BUTTON_WIDTH, button -> pasteHere()));
-        pasteToAllButton = addRenderableWidget(compactButton(PASTE_TO_ALL, actionStartX + (ACTION_BUTTON_WIDTH + ROW_GAP) * 2, actionY, ACTION_BUTTON_WIDTH, button -> pasteToAll()));
+        addRenderableWidget(compactButton(COPY_STYLE, actionStartX, layout.actionY(), ACTION_BUTTON_WIDTH, button -> copyStyle()));
+        pasteHereButton = addRenderableWidget(compactButton(PASTE_HERE, actionStartX + ACTION_BUTTON_WIDTH + ROW_GAP, layout.actionY(), ACTION_BUTTON_WIDTH, button -> pasteHere()));
+        pasteToAllButton = addRenderableWidget(compactButton(PASTE_TO_ALL, actionStartX + (ACTION_BUTTON_WIDTH + ROW_GAP) * 2, layout.actionY(), ACTION_BUTTON_WIDTH, button -> pasteToAll()));
         addRenderableWidget(compactButton(RESET, width / 2 - SMALL_BUTTON_WIDTH - 6, height - 26, SMALL_BUTTON_WIDTH, button -> resetModule()));
         addRenderableWidget(compactButton(DONE, width / 2 + 6, height - 26, SMALL_BUTTON_WIDTH, button -> onClose()));
         updatePasteButtons();
@@ -267,42 +258,26 @@ public class ModuleEditScreen extends Screen {
         module.updateSize();
         int moduleWidth = Math.max(module.getWidth(), 40);
         int moduleHeight = Math.max(module.getHeight(), 11);
-        int labelHeight = font.lineHeight + 8;
+        ModuleEditorLayout layout = ModuleEditorLayout.calculate(width, moduleHeight);
         int boxWidth = Math.min(Math.max(moduleWidth + 32, 220), previewWidth());
-        int boxHeight = Math.max(PREVIEW_MIN_HEIGHT, labelHeight + moduleHeight + 8);
         int boxX = width / 2 - boxWidth / 2;
-        int boxY = previewY();
+        int boxY = layout.previewY();
         int savedX = module.getConfigX();
         int savedY = module.getConfigY();
 
-        graphics.fill(boxX, boxY, boxX + boxWidth, boxY + boxHeight, 0x50000000);
-        drawBorder(graphics, boxX, boxY, boxWidth, boxHeight, 0x80FFFFFF);
+        graphics.fill(boxX, boxY, boxX + boxWidth, boxY + layout.previewHeight(), 0x50000000);
+        drawBorder(graphics, boxX, boxY, boxWidth, layout.previewHeight(), 0x80FFFFFF);
         graphics.text(font, PREVIEW, width / 2 - font.width(PREVIEW.getString()) / 2, boxY + 4, 0xFFCCCCCC, false);
 
-        module.setPosition(width / 2 - moduleWidth / 2, boxY + labelHeight + Math.max(0, (boxHeight - labelHeight - moduleHeight) / 2));
+        module.setPosition(width / 2 - moduleWidth / 2, layout.moduleY());
+        graphics.enableScissor(boxX + 1, layout.previewContentTop(), boxX + boxWidth - 1, layout.previewContentBottom());
         module.render(graphics, a);
+        graphics.disableScissor();
         module.setPosition(savedX, savedY);
     }
 
     private int previewWidth() {
         return Math.max(220, width - 20);
-    }
-
-    private int previewY() {
-        return 48;
-    }
-
-    private int previewBottom() {
-        module.tick();
-        module.updateSize();
-        int moduleHeight = Math.max(module.getHeight(), 11);
-        int labelHeight = font.lineHeight + 8;
-        int boxHeight = Math.max(PREVIEW_MIN_HEIGHT, labelHeight + moduleHeight + 8);
-        return previewY() + boxHeight;
-    }
-
-    private int controlWidth() {
-        return Math.min(126, Math.max(96, (width - 44) / 2));
     }
 
     private void resetModule() {
@@ -383,13 +358,11 @@ public class ModuleEditScreen extends Screen {
     private void applyTextColor() {
         module.setTextColor(0xFF000000 | (Color.HSBtoRGB(textHue, textSaturation, textBrightness) & 0x00FFFFFF));
         syncColorInput();
-        OverlayConfig.save(overlay);
     }
 
     private void applyBackgroundColor() {
         module.setBackgroundColor(Color.HSBtoRGB(backgroundHue, backgroundSaturation, backgroundBrightness) & 0x00FFFFFF);
         syncColorInput();
-        OverlayConfig.save(overlay);
     }
 
     private EditBox createColorInput(int x, int y, int width, Component narration, Consumer<String> responder) {
@@ -732,8 +705,16 @@ public class ModuleEditScreen extends Screen {
             this(x, y, width, translationKey, initialValue, 0, maxValue, setter);
         }
 
+        ValueSlider(int x, int y, int width, int height, String translationKey, int initialValue, int maxValue, IntConsumer setter) {
+            this(x, y, width, height, translationKey, initialValue, 0, maxValue, setter);
+        }
+
         ValueSlider(int x, int y, int width, String translationKey, int initialValue, int minValue, int maxValue, IntConsumer setter) {
-            super(x, y, width, BUTTON_HEIGHT, CommonComponents.EMPTY, maxValue == minValue ? 0.0 : (initialValue - minValue) / (double)(maxValue - minValue));
+            this(x, y, width, BUTTON_HEIGHT, translationKey, initialValue, minValue, maxValue, setter);
+        }
+
+        ValueSlider(int x, int y, int width, int height, String translationKey, int initialValue, int minValue, int maxValue, IntConsumer setter) {
+            super(x, y, width, height, CommonComponents.EMPTY, maxValue == minValue ? 0.0 : (initialValue - minValue) / (double)(maxValue - minValue));
             this.translationKey = translationKey;
             this.setter = setter;
             this.minValue = minValue;
