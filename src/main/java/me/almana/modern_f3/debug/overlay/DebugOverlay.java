@@ -30,9 +30,13 @@ public class DebugOverlay {
 
     private static DebugOverlay instance;
 
+    //? if >=26.1 {
     public static final KeyMapping.Category CATEGORY = new KeyMapping.Category(
         Identifier.fromNamespaceAndPath(ModernF3.MODID, "modern_f3")
     );
+    //?} else {
+    /*public static final String CATEGORY = "key.category.modern_f3.modern_f3";
+    *///?}
 
     //? if neoforge {
     public static final KeyMapping TOGGLE_KEY = new KeyMapping(

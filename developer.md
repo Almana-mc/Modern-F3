@@ -1,10 +1,10 @@
 ﻿# Modern F3 â€” Developer Guide
 
-Add custom debug overlay modules to Modern F3 from your own NeoForge mod.
+Add custom debug overlay modules to Modern F3 from your own mod.
 
 ## Setup
 
-Modern F3 targets **Minecraft 26.1** on **NeoForge 26.1.x**. Add it as a compile-time dependency in your `build.gradle`:
+Modern F3 supports **Minecraft 1.21.1, 26.1.2, and 26.2** on **Fabric and NeoForge**. Add the jar matching your Minecraft version and loader as a compile-time dependency in your `build.gradle`:
 
 ```groovy
 repositories {

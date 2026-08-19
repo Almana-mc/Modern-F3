@@ -4,6 +4,8 @@
 
 A modern replacement for Minecraft's debug overlay. Fully customizable, draggable, and profile-based — all without replacing the vanilla F3 data.
 
+Supports Minecraft 1.21.1, 26.1.2, and 26.2 on Fabric and NeoForge.
+
 ## Features
 
 1. Mirrors all vanilla F3 debug lines (left and right columns) with a clean, styled overlay.
@@ -37,5 +39,7 @@ Modern F3 stores its config per-profile. Profiles are saved in the game director
 ## Development
 
 See [developer.md](developer.md) for the full API guide on adding custom overlay modules from your own mod.
+
+The project uses Gradle Stonecutter. Build a target with `./gradlew :<minecraft>-<loader>:build -x copyjar`, such as `./gradlew :1.21.1-fabric:build -x copyjar`.
 
 As a solo developer, updates may take time sometimes. I wish you will be patient with me and my work. For any questions, feature requests, or bug reports — join the [Discord](https://discord.gg/xTeHR2tdYh).

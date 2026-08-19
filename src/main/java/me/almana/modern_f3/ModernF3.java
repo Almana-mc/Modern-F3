@@ -24,6 +24,7 @@ public class ModernF3 {
     public static class ClientModEvents {
         @SubscribeEvent
         public static void registerKeys(RegisterKeyMappingsEvent event) {
+            //? if >=26.1
             event.registerCategory(DebugOverlay.CATEGORY);
             event.register(DebugOverlay.TOGGLE_KEY);
             event.register(DebugOverlay.EDIT_KEY);

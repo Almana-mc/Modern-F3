@@ -3,3 +3,19 @@ plugins {
 }
 
 stonecutter.active '26.1.2-neoforge'
+
+stonecutter {
+    parameters {
+        replacements {
+            string(current.parsed < '26.1') {
+                replace 'Identifier', 'ResourceLocation'
+                replace 'import net.minecraft.client.gui.GuiGraphicsExtractor;', 'import net.minecraft.client.gui.GuiGraphics;'
+                replace 'GuiGraphicsExtractor graphics', 'GuiGraphics graphics'
+                replace 'GuiGraphicsExtractor g', 'GuiGraphics g'
+                replace 'graphics.text', 'graphics.drawString'
+                replace '.pushMatrix()', '.pushPose()'
+                replace '.popMatrix()', '.popPose()'
+            }
+        }
+    }
+}

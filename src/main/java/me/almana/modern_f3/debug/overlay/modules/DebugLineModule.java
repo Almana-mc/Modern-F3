@@ -1,5 +1,6 @@
 package me.almana.modern_f3.debug.overlay.modules;
 
+import me.almana.modern_f3.client.Compat;
 import me.almana.modern_f3.debug.overlay.DebugScreenMirror;
 import me.almana.modern_f3.debug.overlay.OverlayModule;
 import net.minecraft.client.Minecraft;
@@ -136,11 +137,11 @@ public class DebugLineModule implements OverlayModule {
             graphics.fill(drawX, y, drawX + accent, y + cachedH, textColor | 0xFF000000);
         }
 
-        graphics.pose().pushMatrix();
-        graphics.pose().translate(drawX + accent + pad, y + pad);
-        graphics.pose().scale(scale, scale);
+        Compat.pushPose(graphics);
+        Compat.translate(graphics, drawX + accent + pad, y + pad);
+        Compat.scale(graphics, scale);
         graphics.text(font, line, 0, 0, textColor, textShadow);
-        graphics.pose().popMatrix();
+        Compat.popPose(graphics);
     }
 
     private int backgroundArgb() {

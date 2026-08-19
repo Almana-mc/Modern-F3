@@ -17,6 +17,7 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.Screen;
+//? if >=26.1
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
@@ -194,12 +195,22 @@ public class ModuleEditScreen extends Screen {
     }
 
     @Override
+    //? if >=26.1 {
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+    //?} else {
+    /*public void renderBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+    *///?}
         graphics.fill(0, 0, width, height, 0xC0101010);
     }
 
     @Override
+    //? if >=26.1 {
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+    //?} else {
+    /*public void render(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+    *///?}
+        //? if <26.1
+        /*renderBackground(graphics, mouseX, mouseY, a);*/
         if (colorPickerOpen) {
             drawPopupBackground(graphics);
         } else {
@@ -209,7 +220,11 @@ public class ModuleEditScreen extends Screen {
             graphics.text(font, Component.literal(moduleText), width / 2 - font.width(moduleText) / 2, 28, 0xFFCCCCCC, false);
             drawPreview(graphics, a);
         }
+        //? if >=26.1 {
         super.extractRenderState(graphics, mouseX, mouseY, a);
+        //?} else {
+        /*super.render(graphics, mouseX, mouseY, a);
+        *///?}
     }
 
     private void drawPopupBackground(GuiGraphicsExtractor graphics) {
@@ -533,7 +548,11 @@ public class ModuleEditScreen extends Screen {
         }
 
         @Override
+        //? if >=26.1 {
         protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+        //?} else {
+        /*protected void renderWidget(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+        *///?}
             PickerLayout layout = layout();
             int step = 2;
             float currentHue = hue.get();
@@ -590,23 +609,44 @@ public class ModuleEditScreen extends Screen {
             );
             drawBorder(graphics, layout.previewX - 1, layout.previewY - 1, layout.previewSize + 2, layout.previewSize + 2, 0xB0FFFFFF);
 
+            //? if >=26.1
             handleCursor(graphics);
         }
 
         @Override
+        //? if >=26.1 {
         public void onClick(MouseButtonEvent event, boolean doubleClick) {
+            updateFromClick(event.x(), event.y());
+        }
+        //?} else {
+        /*public void onClick(double mouseX, double mouseY) {
+            updateFromClick(mouseX, mouseY);
+        }
+        *///?}
+
+        private void updateFromClick(double mouseX, double mouseY) {
             PickerLayout layout = layout();
-            dragMode = dragMode(layout, event.x(), event.y());
-            updateFromMouse(layout, event.x(), event.y(), dragMode);
+            dragMode = dragMode(layout, mouseX, mouseY);
+            updateFromMouse(layout, mouseX, mouseY, dragMode);
         }
 
         @Override
+        //? if >=26.1 {
         protected void onDrag(MouseButtonEvent event, double dx, double dy) {
+            updateFromDrag(event.x(), event.y());
+        }
+        //?} else {
+        /*protected void onDrag(double mouseX, double mouseY, double dx, double dy) {
+            updateFromDrag(mouseX, mouseY);
+        }
+        *///?}
+
+        private void updateFromDrag(double mouseX, double mouseY) {
             PickerLayout layout = layout();
             if (dragMode == DragMode.NONE) {
-                dragMode = dragMode(layout, event.x(), event.y());
+                dragMode = dragMode(layout, mouseX, mouseY);
             }
-            updateFromMouse(layout, event.x(), event.y(), dragMode);
+            updateFromMouse(layout, mouseX, mouseY, dragMode);
         }
 
         @Override
@@ -728,7 +768,11 @@ public class ModuleEditScreen extends Screen {
         }
 
         @Override
+        //? if >=26.1 {
         protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+        //?} else {
+        /*protected void renderWidget(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+        *///?}
             boolean hovered = isHoveredOrFocused();
             int x = getX(), y = getY(), w = getWidth(), h = getHeight();
 
@@ -740,12 +784,13 @@ public class ModuleEditScreen extends Screen {
             float textX = x + (w - textWidth) * 0.5F;
             float textY = y + (h - textHeight) * 0.5F;
 
-            graphics.pose().pushMatrix();
-            graphics.pose().translate(textX, textY);
-            graphics.pose().scale(BUTTON_TEXT_SCALE, BUTTON_TEXT_SCALE);
+            Compat.pushPose(graphics);
+            Compat.translate(graphics, textX, textY);
+            Compat.scale(graphics, BUTTON_TEXT_SCALE);
             graphics.text(font, getMessage(), 0, 0, hovered ? 0xFFFFFFFF : (active ? 0xFFBBBBBB : 0xFF666666), false);
-            graphics.pose().popMatrix();
+            Compat.popPose(graphics);
 
+            //? if >=26.1
             handleCursor(graphics);
         }
     }

@@ -45,7 +45,7 @@ jobs:
       matrix: ${{ steps.targets.outputs.matrix }}
       mod_name: ${{ steps.metadata.outputs.mod_name }}
       mod_version: ${{ steps.metadata.outputs.mod_version }}
-      java_version: ${{ steps.metadata.outputs.java_version }}
+      build_java: ${{ steps.metadata.outputs.build_java }}
       release_tags: ${{ steps.targets.outputs.release_tags }}
       publish_discord: ${{ steps.inputs.outputs.publish_discord }}
       publish_github: ${{ steps.inputs.outputs.publish_github }}
@@ -81,17 +81,15 @@ jobs:
         run: |
           mod_name="$(awk -F= '/^mod_name=/{print $2}' gradle.properties | tr -d '\r')"
           mod_version="$(awk -F= '/^mod_version=/{print $2}' gradle.properties | tr -d '\r')"
-          java_version="$(grep -roE 'JavaLanguageVersion\.of\([0-9]+\)' build.gradle build.gradle.kts 2>/dev/null | head -n1 | grep -oE '[0-9]+' || true)"
-
           echo "mod_name=$mod_name" >> "$GITHUB_OUTPUT"
           echo "mod_version=$mod_version" >> "$GITHUB_OUTPUT"
-          echo "java_version=${java_version:-21}" >> "$GITHUB_OUTPUT"
+          echo "build_java=25" >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: ${{ steps.metadata.outputs.java_version }}
+          java-version: ${{ steps.metadata.outputs.build_java }}
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -127,6 +125,12 @@ jobs:
           releases = []
           for minecraft_version, projects in sorted(targets.items()):
               projects.sort()
+              java_versions = {
+                  re.search(r"^java_version=(\d+)$", Path("versions", project, "gradle.properties").read_text(), re.MULTILINE).group(1)
+                  for project, _ in projects
+              }
+              if len(java_versions) != 1:
+                  raise SystemExit(f"Inconsistent Java versions for Minecraft {minecraft_version}: {sorted(java_versions)}")
               release_version = minecraft_version.rsplit(".", 1)[0] if minecraft_version.count(".") > 1 else minecraft_version
               preferred_changelog = Path(f"CHANGELOGS/{release_version}-{mod_version}.md")
               changelogs = sorted(Path("CHANGELOGS").glob(f"*-{mod_version}.md"))
@@ -143,6 +147,7 @@ jobs:
                   "build_tasks": " ".join(f":{project}:build" for project, _ in projects),
                   "loaders": "\\n".join(loader for _, loader in projects),
                   "changelog_file": str(changelog),
+                  "java_version": java_versions.pop(),
               })
 
           print(json.dumps({"include": releases}, separators=(",", ":")))
@@ -169,7 +174,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: ${{ needs.prepare-release.outputs.java_version }}
+          java-version: ${{ needs.prepare-release.outputs.build_java }}
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -194,7 +199,7 @@ jobs:
           loaders: ${{ matrix.loaders }}
           game-versions: ${{ matrix.minecraft_version }}
           game-version-filter: none
-          java: ${{ needs.prepare-release.outputs.java_version }}
+          java: ${{ matrix.java_version }}
           github-token: ${{ needs.prepare-release.outputs.publish_github == 'true' && secrets.GITHUB_TOKEN || '' }}
           github-tag: ${{ matrix.release_tag }}
           github-commitish: ${{ github.sha }}

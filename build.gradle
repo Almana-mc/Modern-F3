@@ -2,12 +2,12 @@ plugins {
     id 'java-library'
     id 'maven-publish'
     id 'idea'
-    id 'net.fabricmc.fabric-loom' version '1.18.0-alpha.8' apply false
     id 'net.neoforged.moddev' version '2.0.141' apply false
 }
 
 def (mcVersion, loader) = stonecutter.current.project.split('-', 2)
 def isFabric = loader == 'fabric'
+def javaVersion = project.property('java_version') as int
 
 version = mod_version
 group = mod_group_id
@@ -16,7 +16,11 @@ base {
     archivesName = "${mod_id}-${loader}-${mcVersion}"
 }
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(javaVersion)
+    sourceCompatibility = JavaVersion.toVersion(javaVersion)
+    targetCompatibility = JavaVersion.toVersion(javaVersion)
+}
 
 repositories {
     mavenLocal()
@@ -31,7 +35,7 @@ stonecutter {
 }
 
 if (isFabric) {
-    apply plugin: 'net.fabricmc.fabric-loom'
+    apply plugin: 'dev.kikugie.loom-back-compat'
 
     loom {
         mods {
@@ -43,8 +47,9 @@ if (isFabric) {
 
     dependencies {
         minecraft "com.mojang:minecraft:${mcVersion}"
-        implementation "net.fabricmc:fabric-loader:${project.property('deps.fabric_loader')}"
-        implementation "net.fabricmc.fabric-api:fabric-api:${project.property('deps.fabric_api')}"
+        loomx.applyMojangMappings()
+        modImplementation "net.fabricmc:fabric-loader:${project.property('deps.fabric_loader')}"
+        modImplementation "net.fabricmc.fabric-api:fabric-api:${project.property('deps.fabric_api')}"
     }
 } else {
     apply plugin: 'net.neoforged.moddev'
@@ -85,15 +90,26 @@ if (isFabric) {
 
 def expandProps = [
     minecraft_version_range: project.minecraft_version_range,
-    neo_version_range      : project.neo_version_range,
-    loader_version_range   : project.loader_version_range,
     mod_id                 : mod_id,
     mod_name               : mod_name,
     mod_license            : mod_license,
     mod_version            : mod_version,
     mod_authors            : mod_authors,
     mod_description        : mod_description,
+    debug_overlay_mixin    : mcVersion == '1.21.1' ? ',\n    "DebugScreenOverlayAccessor"' : '',
 ]
+
+if (isFabric) {
+    expandProps += [
+        fabric_loader_version_range: project.fabric_loader_version_range,
+        java_version_range         : ">=${javaVersion}",
+    ]
+} else {
+    expandProps += [
+        neo_version_range   : project.neo_version_range,
+        loader_version_range: project.loader_version_range,
+    ]
+}
 
 processResources {
     def props = expandProps
@@ -104,6 +120,9 @@ processResources {
         exclude 'fabric.mod.json'
     }
     filesMatching(['fabric.mod.json', 'META-INF/neoforge.mods.toml']) {
+        expand props
+    }
+    filesMatching('modern_f3.mixins.json') {
         expand props
     }
 }

@@ -10,11 +10,14 @@ pluginManagement {
 
 plugins {
     id 'dev.kikugie.stonecutter' version '0.9.6'
+    id 'dev.kikugie.loom-back-compat' version '0.4.2'
     id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
 }
 
 stonecutter {
     create(rootProject) {
+        vers('1.21.1-fabric', '1.21.1')
+        vers('1.21.1-neoforge', '1.21.1')
         vers('26.1.2-fabric', '26.1.2')
         vers('26.1.2-neoforge', '26.1.2')
         vers('26.2-fabric', '26.2')

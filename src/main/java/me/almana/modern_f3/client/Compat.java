@@ -1,6 +1,7 @@
 package me.almana.modern_f3.client;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -45,5 +46,37 @@ public final class Compat {
         *///?} else {
         return mc.options.hideGui;
         //?}
+    }
+
+    public static void pushPose(GuiGraphicsExtractor graphics) {
+        //? if >=26.1 {
+        graphics.pose().pushMatrix();
+        //?} else {
+        /*graphics.pose().pushPose();
+        *///?}
+    }
+
+    public static void translate(GuiGraphicsExtractor graphics, float x, float y) {
+        //? if >=26.1 {
+        graphics.pose().translate(x, y);
+        //?} else {
+        /*graphics.pose().translate(x, y, 0);
+        *///?}
+    }
+
+    public static void scale(GuiGraphicsExtractor graphics, float scale) {
+        //? if >=26.1 {
+        graphics.pose().scale(scale, scale);
+        //?} else {
+        /*graphics.pose().scale(scale, scale, 1);
+        *///?}
+    }
+
+    public static void popPose(GuiGraphicsExtractor graphics) {
+        //? if >=26.1 {
+        graphics.pose().popMatrix();
+        //?} else {
+        /*graphics.pose().popPose();
+        *///?}
     }
 }

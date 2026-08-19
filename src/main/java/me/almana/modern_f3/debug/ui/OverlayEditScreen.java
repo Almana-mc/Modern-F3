@@ -10,6 +10,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
+//? if >=26.1
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
@@ -101,7 +102,11 @@ public class OverlayEditScreen extends Screen {
     }
 
     @Override
+    //? if >=26.1 {
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+    //?} else {
+    /*public void renderBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+    *///?}
         graphics.fill(0, 0, width, height, 0x60000000);
         int barY = height - BAR_HEIGHT;
         graphics.fill(0, barY, width, height, 0xB0101010);
@@ -109,7 +114,13 @@ public class OverlayEditScreen extends Screen {
     }
 
     @Override
+    //? if >=26.1 {
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+    //?} else {
+    /*public void render(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+    *///?}
+        //? if <26.1
+        /*renderBackground(graphics, mouseX, mouseY, a);*/
         Font font = this.font;
         List<OverlayModule> modules = overlay.getModules();
 
@@ -142,13 +153,17 @@ public class OverlayEditScreen extends Screen {
             drawBorder(graphics, dropdownX, dropdownY, dropdownW, dropdownH, 0x60FFFFFF);
         }
 
-        graphics.pose().pushMatrix();
-        graphics.pose().translate(4, height - BAR_HEIGHT - 12);
-        graphics.pose().scale(HELP_TEXT_SCALE, HELP_TEXT_SCALE);
+        Compat.pushPose(graphics);
+        Compat.translate(graphics, 4, height - BAR_HEIGHT - 12);
+        Compat.scale(graphics, HELP_TEXT_SCALE);
         graphics.text(font, HELP, 0, 0, 0xFFCCCCCC, true);
-        graphics.pose().popMatrix();
+        Compat.popPose(graphics);
 
+        //? if >=26.1 {
         super.extractRenderState(graphics, mouseX, mouseY, a);
+        //?} else {
+        /*super.render(graphics, mouseX, mouseY, a);
+        *///?}
     }
 
     private void drawSnapGrid(GuiGraphicsExtractor graphics) {
@@ -171,20 +186,30 @@ public class OverlayEditScreen extends Screen {
     }
 
     @Override
+    //? if >=26.1 {
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         if (super.mouseClicked(event, doubleClick)) return true;
+        return handleMouseClicked(event.x(), event.y(), event.button());
+    }
+    //?} else {
+    /*public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (super.mouseClicked(mouseX, mouseY, button)) return true;
+        return handleMouseClicked(mouseX, mouseY, button);
+    }
+    *///?}
 
+    private boolean handleMouseClicked(double mouseX, double mouseY, int button) {
         List<OverlayModule> modules = visibleModules();
         for (int i = modules.size() - 1; i >= 0; i--) {
             OverlayModule m = modules.get(i);
-            if (isInside(m, event.x(), event.y())) {
-                if (event.button() == 0) {
+            if (isInside(m, mouseX, mouseY)) {
+                if (button == 0) {
                     dragged = m;
-                    dragOffX = (int) event.x() - m.getX();
-                    dragOffY = (int) event.y() - m.getY();
+                    dragOffX = (int) mouseX - m.getX();
+                    dragOffY = (int) mouseY - m.getY();
                     return true;
                 }
-                if (event.button() == 1) {
+                if (button == 1) {
                     Compat.setScreen(minecraft, new ModuleEditScreen(this, m));
                     return true;
                 }
@@ -194,12 +219,24 @@ public class OverlayEditScreen extends Screen {
     }
 
     @Override
+    //? if >=26.1 {
     public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
-        if (dragged != null && event.button() == 0) {
-            int nx = (int) event.x() - dragOffX;
-            int ny = (int) event.y() - dragOffY;
+        if (handleMouseDragged(event.x(), event.y(), event.button())) return true;
+        return super.mouseDragged(event, dx, dy);
+    }
+    //?} else {
+    /*public boolean mouseDragged(double mouseX, double mouseY, int button, double dx, double dy) {
+        if (handleMouseDragged(mouseX, mouseY, button)) return true;
+        return super.mouseDragged(mouseX, mouseY, button, dx, dy);
+    }
+    *///?}
 
-            if (event.hasShiftDown()) {
+    private boolean handleMouseDragged(double mouseX, double mouseY, int button) {
+        if (dragged != null && button == 0) {
+            int nx = (int) mouseX - dragOffX;
+            int ny = (int) mouseY - dragOffY;
+
+            if (isShiftDown()) {
                 nx = snap(nx, DebugOverlay.DEFAULT_X, DebugOverlay.SNAP_X_STEP);
                 ny = snap(ny, DebugOverlay.DEFAULT_Y, DebugOverlay.DEFAULT_ROW_STEP);
             }
@@ -209,17 +246,29 @@ public class OverlayEditScreen extends Screen {
             dragged.setPosition(nx, ny);
             return true;
         }
-        return super.mouseDragged(event, dx, dy);
+        return false;
     }
 
     @Override
+    //? if >=26.1 {
     public boolean mouseReleased(MouseButtonEvent event) {
-        if (dragged != null && event.button() == 0) {
+        if (handleMouseReleased(event.button())) return true;
+        return super.mouseReleased(event);
+    }
+    //?} else {
+    /*public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (handleMouseReleased(button)) return true;
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
+    *///?}
+
+    private boolean handleMouseReleased(int button) {
+        if (dragged != null && button == 0) {
             dragged = null;
             OverlayConfig.save(overlay);
             return true;
         }
-        return super.mouseReleased(event);
+        return false;
     }
 
     private boolean isInside(OverlayModule m, double mx, double my) {
@@ -305,8 +354,13 @@ public class OverlayEditScreen extends Screen {
     }
 
     private boolean isShiftDown() {
+        //? if >=26.1 {
         return InputConstants.isKeyDown(minecraft.getWindow(), InputConstants.KEY_LSHIFT)
             || InputConstants.isKeyDown(minecraft.getWindow(), InputConstants.KEY_RSHIFT);
+        //?} else {
+        /*return InputConstants.isKeyDown(minecraft.getWindow().getWindow(), InputConstants.KEY_LSHIFT)
+            || InputConstants.isKeyDown(minecraft.getWindow().getWindow(), InputConstants.KEY_RSHIFT);
+        *///?}
     }
 
     @Override
@@ -326,7 +380,11 @@ public class OverlayEditScreen extends Screen {
         }
 
         @Override
+        //? if >=26.1 {
         protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+        //?} else {
+        /*protected void renderWidget(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+        *///?}
             boolean hovered = isHoveredOrFocused();
             int x = getX(), y = getY(), w = getWidth(), h = getHeight();
 
@@ -338,12 +396,13 @@ public class OverlayEditScreen extends Screen {
             float textX = x + (w - textWidth) * 0.5F;
             float textY = y + (h - textHeight) * 0.5F;
 
-            graphics.pose().pushMatrix();
-            graphics.pose().translate(textX, textY);
-            graphics.pose().scale(BUTTON_TEXT_SCALE, BUTTON_TEXT_SCALE);
+            Compat.pushPose(graphics);
+            Compat.translate(graphics, textX, textY);
+            Compat.scale(graphics, BUTTON_TEXT_SCALE);
             graphics.text(font, getMessage(), 0, 0, hovered ? 0xFFFFFFFF : (active ? 0xFFBBBBBB : 0xFF666666), false);
-            graphics.pose().popMatrix();
+            Compat.popPose(graphics);
 
+            //? if >=26.1
             handleCursor(graphics);
         }
     }

@@ -7,6 +7,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+//? if >=26.1
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
@@ -58,12 +59,22 @@ public class ProfileCreateScreen extends Screen {
     }
 
     @Override
+    //? if >=26.1 {
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+    //?} else {
+    /*public void renderBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+    *///?}
         graphics.fill(0, 0, width, height, 0xC0101010);
     }
 
     @Override
+    //? if >=26.1 {
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+    //?} else {
+    /*public void render(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+    *///?}
+        //? if <26.1
+        /*renderBackground(graphics, mouseX, mouseY, a);*/
         int cardX = width / 2 - CARD_WIDTH / 2;
         int cardY = height / 2 - CARD_HEIGHT / 2;
 
@@ -71,7 +82,11 @@ public class ProfileCreateScreen extends Screen {
         drawBorder(graphics, cardX, cardY, CARD_WIDTH, CARD_HEIGHT, 0x60FFFFFF);
 
         graphics.text(font, TITLE, width / 2 - font.width(TITLE.getString()) / 2, cardY + 8, 0xFFE0E0E0, false);
+        //? if >=26.1 {
         super.extractRenderState(graphics, mouseX, mouseY, a);
+        //?} else {
+        /*super.render(graphics, mouseX, mouseY, a);
+        *///?}
     }
 
     private void drawBorder(GuiGraphicsExtractor g, int x, int y, int w, int h, int color) {
@@ -82,14 +97,26 @@ public class ProfileCreateScreen extends Screen {
     }
 
     @Override
+    //? if >=26.1 {
     public boolean keyPressed(KeyEvent event) {
-        if (event.key() == GLFW.GLFW_KEY_ENTER || event.key() == GLFW.GLFW_KEY_KP_ENTER) {
+        if (submitOnEnter(event.key())) return true;
+        return super.keyPressed(event);
+    }
+    //?} else {
+    /*public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (submitOnEnter(keyCode)) return true;
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+    *///?}
+
+    private boolean submitOnEnter(int keyCode) {
+        if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
             if (createButton.active) {
                 createProfile();
                 return true;
             }
         }
-        return super.keyPressed(event);
+        return false;
     }
 
     @Override

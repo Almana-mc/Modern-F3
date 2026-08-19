@@ -2,6 +2,7 @@ package me.almana.modern_f3.debug.overlay;
 
 import me.almana.modern_f3.client.Compat;
 import net.minecraft.client.Minecraft;
+//? if >=26.1 {
 import net.minecraft.client.gui.components.debug.DebugScreenDisplayer;
 import net.minecraft.client.gui.components.debug.DebugScreenEntries;
 import net.minecraft.client.gui.components.debug.DebugScreenEntry;
@@ -14,6 +15,10 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import org.jspecify.annotations.Nullable;
+//?} else {
+/*import me.almana.modern_f3.mixin.DebugScreenOverlayAccessor;
+import net.minecraft.client.gui.components.DebugScreenOverlay;
+*///?}
 
 import java.util.ArrayList;
 import java.util.BitSet;
@@ -27,30 +32,65 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 public class DebugScreenMirror {
+    private final Minecraft minecraft = Minecraft.getInstance();
+    private long buildTick = Long.MIN_VALUE;
+    private Snapshot cachedFull = Snapshot.EMPTY;
+    private Snapshot cachedFiltered = Snapshot.EMPTY;
+
+    //? if >=26.1 {
     private static final Comparator<Identifier> VANILLA_FIRST =
         Comparator.<Identifier, Boolean>comparing(id -> !id.getNamespace().equals("minecraft"))
             .thenComparing(Identifier::toString);
 
-    private final Minecraft minecraft = Minecraft.getInstance();
-
     private @Nullable ChunkPos lastPos;
     private @Nullable LevelChunk clientChunk;
     private @Nullable CompletableFuture<LevelChunk> serverChunk;
-    private long buildTick = Long.MIN_VALUE;
-    private Snapshot cachedFull = Snapshot.EMPTY;
-    private Snapshot cachedFiltered = Snapshot.EMPTY;
     private boolean editMode;
     private boolean currentEntryActive;
+    //?}
 
     public void setEditMode(boolean editMode) {
+        //? if >=26.1
         this.editMode = editMode;
     }
 
     public Snapshot snapshot() {
+        //? if >=26.1 {
         rebuild();
         return editMode ? cachedFull : cachedFiltered;
+        //?} else {
+        /*rebuildLegacy();
+        return cachedFull;
+        *///?}
     }
 
+    //? if <26.1 {
+    /*private void rebuildLegacy() {
+        long guiTick = Compat.guiTicks(minecraft);
+        if (buildTick == guiTick) return;
+        buildTick = guiTick;
+
+        if (!minecraft.isGameLoadFinished()
+            || minecraft.level == null
+            || minecraft.getConnection() == null
+            || minecraft.getCameraEntity() == null
+            || Compat.hudHidden(minecraft) && Compat.screen(minecraft) == null) {
+            cachedFull = Snapshot.EMPTY;
+            return;
+        }
+
+        DebugScreenOverlay overlay = minecraft.gui.getDebugOverlay();
+        DebugScreenOverlayAccessor accessor = (DebugScreenOverlayAccessor) overlay;
+        accessor.modernF3$setBlock(minecraft.getCameraEntity().pick(20.0, 0.0F, false));
+        accessor.modernF3$setLiquid(minecraft.getCameraEntity().pick(20.0, 0.0F, true));
+
+        CompactResult left = compactLegacy(accessor.modernF3$getGameInformation());
+        CompactResult right = compactLegacy(accessor.modernF3$getSystemInformation());
+        cachedFull = new Snapshot(left.lines, right.lines, left.inactive, right.inactive);
+    }
+    *///?}
+
+    //? if >=26.1 {
     private void rebuild() {
         long guiTick = Compat.guiTicks(minecraft);
         if (buildTick == guiTick) return;
@@ -272,6 +312,8 @@ public class DebugScreenMirror {
         return clientChunk;
     }
 
+    //?}
+
     private static CompactResult compactLines(List<String> lines, List<Boolean> active) {
         LinkedHashMap<String, Boolean> seen = new LinkedHashMap<>();
         for (int i = 0; i < lines.size(); i++) {
@@ -288,6 +330,10 @@ public class DebugScreenMirror {
             idx++;
         }
         return new CompactResult(compacted, inactive);
+    }
+
+    private static CompactResult compactLegacy(List<String> lines) {
+        return compactLines(lines, lines.stream().map(line -> true).toList());
     }
 
     private record CompactResult(List<String> lines, BitSet inactive) {}
