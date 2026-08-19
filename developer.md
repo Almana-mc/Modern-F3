@@ -1,4 +1,4 @@
-﻿# Modern F3 â€” Developer Guide
+﻿# Modern F3 Developer Guide
 
 Add custom debug overlay modules to Modern F3 from your own mod.
 
@@ -100,7 +100,7 @@ public class PingModule implements OverlayModule {
 
 ## Registering
 
-All registration goes through `me.almana.modern_f3.api.ModernF3Api`. Register early â€” ideally in your mod constructor. Modules registered before the overlay initializes are queued and flushed automatically.
+All registration goes through `me.almana.modern_f3.api.ModernF3Api`. Register early ideally in your mod constructor. Modules registered before the overlay initializes are queued and flushed automatically.
 
 ### Direct registration
 
