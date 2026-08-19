@@ -29,7 +29,7 @@ on:
         type: string
 
 concurrency:
-  group: release-${{ github.ref_name || github.run_id }}
+  group: release
   cancel-in-progress: false
 
 permissions:
@@ -117,7 +117,7 @@ jobs:
 
           targets = defaultdict(list)
           for name in set(re.findall(r"Project \x27:([^\x27]+)\x27", sys.stdin.read())):
-              match = re.fullmatch(r"(\d+(?:\.\d+)+)-([a-z0-9]+)", name)
+              match = re.fullmatch(r"(.+)-([a-z0-9]+)", name)
               if match:
                   targets[match.group(1)].append((name, match.group(2)))
 

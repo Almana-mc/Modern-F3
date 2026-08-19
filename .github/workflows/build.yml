@@ -9,18 +9,8 @@ permissions:
 
 jobs:
   build:
-    name: ${{ matrix.target }}
+    name: All Stonecutter versions
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        target:
-          - 1.21.1-fabric
-          - 1.21.1-neoforge
-          - 26.1.2-fabric
-          - 26.1.2-neoforge
-          - 26.2-fabric
-          - 26.2-neoforge
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,39 +27,57 @@ jobs:
       - name: Ensure gradlew is executable
         run: chmod +x ./gradlew
 
-      - name: Build target
-        run: ./gradlew :${{ matrix.target }}:build -x copyjar --console=plain
+      - name: Build all targets
+        run: ./gradlew build -x copyjar --console=plain
 
-      - name: Verify artifact
+      - name: Verify artifacts
         shell: bash
-        env:
-          TARGET: ${{ matrix.target }}
         run: |
           python3 - <<'PY'
-          import os
+          import re
           import struct
           import zipfile
           from pathlib import Path
 
-          target = os.environ["TARGET"]
-          jars = [path for path in Path("versions", target, "build", "libs").glob("*.jar") if "sources" not in path.name]
-          if len(jars) != 1:
-              raise SystemExit(f"Expected one release jar for {target}, found {len(jars)}")
+          def properties(path):
+              return dict(
+                  line.split("=", 1)
+                  for line in path.read_text().splitlines()
+                  if line and not line.startswith("#") and "=" in line
+              )
 
-          with zipfile.ZipFile(jars[0]) as artifact:
-              names = set(artifact.namelist())
-              fabric = "fabric.mod.json" in names
-              neoforge = "META-INF/neoforge.mods.toml" in names
-              if fabric == neoforge or fabric != target.endswith("-fabric"):
-                  raise SystemExit(f"Incorrect loader metadata in {jars[0]}")
+          root = properties(Path("gradle.properties"))
+          targets = sorted(Path("versions").glob("*/gradle.properties"))
+          if not targets:
+              raise SystemExit("No Stonecutter targets were found.")
 
-              descriptor = "fabric.mod.json" if fabric else "META-INF/neoforge.mods.toml"
-              if b"${" in artifact.read(descriptor):
-                  raise SystemExit(f"Unexpanded metadata in {jars[0]}")
+          for target_properties in targets:
+              target = target_properties.parent.name
+              match = re.fullmatch(r"(.+)-(fabric|neoforge)", target)
+              if not match:
+                  raise SystemExit(f"Unsupported Stonecutter target: {target}")
 
-              class_bytes = artifact.read("me/almana/modern_f3/ModernF3.class")
-              major = struct.unpack(">H", class_bytes[6:8])[0]
-              expected = 65 if target.startswith("1.21.1-") else 69
-              if major != expected:
-                  raise SystemExit(f"Expected class version {expected}, found {major}")
+              minecraft_version, loader = match.groups()
+              expected_name = f"{root['mod_id']}-{loader}-{minecraft_version}-{root['mod_version']}.jar"
+              jars = list(Path("versions", target, "build", "libs").glob("*.jar"))
+              if [jar.name for jar in jars] != [expected_name]:
+                  raise SystemExit(f"Unexpected release jars for {target}: {[jar.name for jar in jars]}")
+
+              with zipfile.ZipFile(jars[0]) as artifact:
+                  names = set(artifact.namelist())
+                  fabric = "fabric.mod.json" in names
+                  neoforge = "META-INF/neoforge.mods.toml" in names
+                  if fabric == neoforge or fabric != (loader == "fabric"):
+                      raise SystemExit(f"Incorrect loader metadata in {jars[0]}")
+
+                  descriptor = "fabric.mod.json" if fabric else "META-INF/neoforge.mods.toml"
+                  if b"${" in artifact.read(descriptor):
+                      raise SystemExit(f"Unexpanded metadata in {jars[0]}")
+
+                  java_version = int(properties(target_properties)["java_version"])
+                  class_bytes = artifact.read("me/almana/modern_f3/ModernF3.class")
+                  major = struct.unpack(">H", class_bytes[6:8])[0]
+                  expected = java_version + 44
+                  if major != expected:
+                      raise SystemExit(f"Expected class version {expected}, found {major}")
           PY
