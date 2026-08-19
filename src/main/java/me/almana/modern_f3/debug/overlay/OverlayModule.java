@@ -2,7 +2,7 @@ package me.almana.modern_f3.debug.overlay;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
-public interface OverlayModule {
+public interface OverlayModule extends ModuleEnabledState {
     String id();
     String displayName();
 

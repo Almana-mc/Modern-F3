@@ -3,9 +3,14 @@ package me.almana.modern_f3.client;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
+//? if >=26.1
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 
 public final class Compat {
+    private static final int ICON_TEXTURE_SIZE = 512;
+
     private Compat() {}
 
     public static Screen screen(Minecraft mc) {
@@ -79,4 +84,62 @@ public final class Compat {
         /*graphics.pose().popPose();
         *///?}
     }
+
+    public static void blitIcon(GuiGraphicsExtractor graphics, Identifier texture, int x, int y, int size) {
+        IconBlitLayout layout = iconLayout(size);
+        //? if >=26.1 {
+        graphics.blit(
+            RenderPipelines.GUI_TEXTURED,
+            texture,
+            x,
+            y,
+            layout.u(),
+            layout.v(),
+            layout.width(),
+            layout.height(),
+            layout.sourceWidth(),
+            layout.sourceHeight(),
+            layout.textureWidth(),
+            layout.textureHeight()
+        );
+        //?} else {
+        /*graphics.blit(
+            texture,
+            x,
+            y,
+            layout.width(),
+            layout.height(),
+            layout.u(),
+            layout.v(),
+            layout.sourceWidth(),
+            layout.sourceHeight(),
+            layout.textureWidth(),
+            layout.textureHeight()
+        );
+        *///?}
+    }
+
+    static IconBlitLayout iconLayout(int size) {
+        return new IconBlitLayout(
+            size,
+            size,
+            0,
+            0,
+            ICON_TEXTURE_SIZE,
+            ICON_TEXTURE_SIZE,
+            ICON_TEXTURE_SIZE,
+            ICON_TEXTURE_SIZE
+        );
+    }
+
+    record IconBlitLayout(
+        int width,
+        int height,
+        float u,
+        float v,
+        int sourceWidth,
+        int sourceHeight,
+        int textureWidth,
+        int textureHeight
+    ) {}
 }

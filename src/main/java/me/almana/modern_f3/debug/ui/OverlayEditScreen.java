@@ -1,18 +1,21 @@
 package me.almana.modern_f3.debug.ui;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import me.almana.modern_f3.ModernF3;
 import me.almana.modern_f3.client.Compat;
 import me.almana.modern_f3.debug.config.OverlayConfig;
 import me.almana.modern_f3.debug.config.OverlayProfiles;
 import me.almana.modern_f3.debug.overlay.DebugOverlay;
+import me.almana.modern_f3.debug.overlay.ModuleEnabledState;
 import me.almana.modern_f3.debug.overlay.OverlayModule;
-import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 //? if >=26.1
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,26 +25,37 @@ public class OverlayEditScreen extends Screen {
     private static final Component DONE = Component.translatable("button.modern_f3.done");
     private static final Component RESET = Component.translatable("button.modern_f3.reset");
     private static final Component NEW_PROFILE = Component.translatable("button.modern_f3.new_profile");
-    private static final Component HELP = Component.translatable("screen.modern_f3.edit_overlay.help");
+    private static final Component ENABLE_ALL = Component.translatable("button.modern_f3.enable_all");
+    private static final Component DISABLE_ALL = Component.translatable("button.modern_f3.disable_all");
+    private static final Component HIDE_CONTROLS = Component.translatable("button.modern_f3.hide_controls");
+    private static final Component SHOW_CONTROLS = Component.translatable("button.modern_f3.show_controls");
     private static final int BUTTON_HEIGHT = 12;
-    private static final int SMALL_BUTTON_WIDTH = 48;
-    private static final int TOP_BUTTON_WIDTH = 82;
     private static final int PROFILE_BUTTON_WIDTH = 96;
-    private static final int BAR_PADDING = 4;
-    private static final int BAR_HEIGHT = BUTTON_HEIGHT + BAR_PADDING * 2;
     private static final float BUTTON_TEXT_SCALE = 0.7F;
-    private static final float HELP_TEXT_SCALE = 0.6F;
+    private static final Identifier EYE_ICON = icon("eye");
+    private static final Identifier USER_ICON = icon("user");
+    private static final Identifier USER_ADD_ICON = icon("user_add");
+    private static final Identifier MENU_ICON = icon("menu");
+    private static final Identifier CHECK_ICON = icon("check");
+    private static final Identifier CROSS_ICON = icon("cross");
+    private static final Identifier REFRESH_ICON = icon("refresh");
+    private static final Identifier ARROW_RIGHT_ICON = icon("arrow_right");
     private static boolean hideDisabledModules;
 
     private final DebugOverlay overlay = DebugOverlay.get();
     private OverlayModule dragged;
     private int dragOffX, dragOffY;
-    private Button profileButton;
-    private Button hideDisabledButton;
+    private IconButton profileButton;
+    private IconButton hideDisabledButton;
     private List<OverlayProfiles.ProfileOption> profiles = List.of();
     private int currentProfileIndex;
     private boolean profileMenuOpen;
+    private boolean dockExpanded = true;
     private int dropdownX, dropdownY, dropdownW, dropdownH;
+
+    private static Identifier icon(String name) {
+        return Identifier.fromNamespaceAndPath(ModernF3.MODID, "textures/gui/editor/" + name + ".png");
+    }
 
     public OverlayEditScreen() {
         super(TITLE);
@@ -51,29 +65,42 @@ public class OverlayEditScreen extends Screen {
     protected void init() {
         overlay.setEditMode(true);
         refreshProfiles();
-        int barY = height - BAR_HEIGHT;
-        int btnY = barY + BAR_PADDING;
+        OverlayEditorLayout.PanelBounds panel = panelBounds();
+        if (!dockExpanded) {
+            int buttonX = panel.x() + OverlayEditorLayout.PANEL_PADDING;
+            int buttonY = panel.y() + 2;
+            addRenderableWidget(iconButton(SHOW_CONTROLS, MENU_ICON, buttonX, buttonY, btn -> toggleDock()));
+            dropdownH = 0;
+            return;
+        }
 
-        int gap = 6;
-        int totalW = TOP_BUTTON_WIDTH + PROFILE_BUTTON_WIDTH + SMALL_BUTTON_WIDTH + SMALL_BUTTON_WIDTH + SMALL_BUTTON_WIDTH + gap * 4;
-        int startX = (width - totalW) / 2;
+        int firstRowY = panel.y() + 5;
+        int secondRowY = panel.y() + 25;
+        int startX = panel.x() + OverlayEditorLayout.PANEL_PADDING;
 
-        hideDisabledButton = addRenderableWidget(compactButton(hideDisabledMessage(), startX, btnY, TOP_BUTTON_WIDTH, btn -> toggleHideDisabled()));
-        startX += TOP_BUTTON_WIDTH + gap;
-        profileButton = addRenderableWidget(compactButton(currentProfileMessage(), startX, btnY, PROFILE_BUTTON_WIDTH, btn -> toggleProfileMenu()));
-        startX += PROFILE_BUTTON_WIDTH + gap;
-        addRenderableWidget(compactButton(NEW_PROFILE, startX, btnY, SMALL_BUTTON_WIDTH, btn -> {
+        hideDisabledButton = addRenderableWidget(iconButton(hideDisabledMessage(), EYE_ICON, startX, firstRowY, btn -> toggleHideDisabled()));
+        startX += OverlayEditorLayout.ICON_BUTTON_SIZE + OverlayEditorLayout.BUTTON_GAP;
+        profileButton = addRenderableWidget(iconButton(currentProfileMessage(), USER_ICON, startX, firstRowY, btn -> toggleProfileMenu()));
+        startX += OverlayEditorLayout.ICON_BUTTON_SIZE + OverlayEditorLayout.BUTTON_GAP;
+        addRenderableWidget(iconButton(NEW_PROFILE, USER_ADD_ICON, startX, firstRowY, btn -> {
             profileMenuOpen = false;
             Compat.setScreen(minecraft, new ProfileCreateScreen(this));
         }));
-        startX += SMALL_BUTTON_WIDTH + gap;
-        addRenderableWidget(compactButton(RESET, startX, btnY, SMALL_BUTTON_WIDTH, btn -> resetLayout()));
-        startX += SMALL_BUTTON_WIDTH + gap;
-        addRenderableWidget(compactButton(DONE, startX, btnY, SMALL_BUTTON_WIDTH, btn -> onClose()));
+        startX += OverlayEditorLayout.ICON_BUTTON_SIZE + OverlayEditorLayout.BUTTON_GAP;
+        addRenderableWidget(iconButton(HIDE_CONTROLS, MENU_ICON, startX, firstRowY, btn -> toggleDock()));
+
+        startX = panel.x() + OverlayEditorLayout.PANEL_PADDING;
+        addRenderableWidget(iconButton(ENABLE_ALL, CHECK_ICON, startX, secondRowY, btn -> setAllModulesEnabled(true)));
+        startX += OverlayEditorLayout.ICON_BUTTON_SIZE + OverlayEditorLayout.BUTTON_GAP;
+        addRenderableWidget(iconButton(DISABLE_ALL, CROSS_ICON, startX, secondRowY, btn -> setAllModulesEnabled(false)));
+        startX += OverlayEditorLayout.ICON_BUTTON_SIZE + OverlayEditorLayout.BUTTON_GAP;
+        addRenderableWidget(iconButton(RESET, REFRESH_ICON, startX, secondRowY, btn -> resetLayout()));
+        startX += OverlayEditorLayout.ICON_BUTTON_SIZE + OverlayEditorLayout.BUTTON_GAP;
+        addRenderableWidget(iconButton(DONE, ARROW_RIGHT_ICON, startX, secondRowY, btn -> onClose()));
 
         if (profileMenuOpen && !profiles.isEmpty()) {
-            int optionX = width / 2 - PROFILE_BUTTON_WIDTH / 2;
-            int firstOptionY = Math.max(24, barY - profiles.size() * (BUTTON_HEIGHT + 2) - 4);
+            int optionX = profileButton.getX();
+            int firstOptionY = Math.max(24, panel.y() - profiles.size() * (BUTTON_HEIGHT + 2) - 4);
             dropdownX = optionX - 4;
             dropdownY = firstOptionY - 4;
             dropdownW = PROFILE_BUTTON_WIDTH + 8;
@@ -108,9 +135,6 @@ public class OverlayEditScreen extends Screen {
     /*public void renderBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
     *///?}
         graphics.fill(0, 0, width, height, 0x60000000);
-        int barY = height - BAR_HEIGHT;
-        graphics.fill(0, barY, width, height, 0xB0101010);
-        graphics.fill(0, barY, width, barY + 1, 0x40FFFFFF);
     }
 
     @Override
@@ -121,7 +145,6 @@ public class OverlayEditScreen extends Screen {
     *///?}
         //? if <26.1
         /*renderBackground(graphics, mouseX, mouseY, a);*/
-        Font font = this.font;
         List<OverlayModule> modules = overlay.getModules();
 
         if (isShiftDown()) {
@@ -148,22 +171,38 @@ public class OverlayEditScreen extends Screen {
             }
         }
 
+        //? if >=26.1 {
+        graphics.nextStratum();
+        //?} else {
+        /*graphics.pose().pushPose();
+        graphics.pose().translate(0, 0, 200);
+        *///?}
+
+        drawDockBackground(graphics);
+
         if (profileMenuOpen && dropdownH > 0) {
             graphics.fill(dropdownX, dropdownY, dropdownX + dropdownW, dropdownY + dropdownH, 0xD0101010);
             drawBorder(graphics, dropdownX, dropdownY, dropdownW, dropdownH, 0x60FFFFFF);
         }
-
-        Compat.pushPose(graphics);
-        Compat.translate(graphics, 4, height - BAR_HEIGHT - 12);
-        Compat.scale(graphics, HELP_TEXT_SCALE);
-        graphics.text(font, HELP, 0, 0, 0xFFCCCCCC, true);
-        Compat.popPose(graphics);
 
         //? if >=26.1 {
         super.extractRenderState(graphics, mouseX, mouseY, a);
         //?} else {
         /*super.render(graphics, mouseX, mouseY, a);
         *///?}
+
+        //? if <26.1
+        /*graphics.pose().popPose();*/
+    }
+
+    private void drawDockBackground(GuiGraphicsExtractor graphics) {
+        OverlayEditorLayout.PanelBounds panel = panelBounds();
+        graphics.fill(panel.x(), panel.y(), panel.x() + panel.width(), panel.y() + panel.height(), 0xFF101010);
+        drawBorder(graphics, panel.x(), panel.y(), panel.width(), panel.height(), 0x60FFFFFF);
+    }
+
+    private OverlayEditorLayout.PanelBounds panelBounds() {
+        return OverlayEditorLayout.panelBounds(width, height, dockExpanded);
     }
 
     private void drawSnapGrid(GuiGraphicsExtractor graphics) {
@@ -199,6 +238,9 @@ public class OverlayEditScreen extends Screen {
     *///?}
 
     private boolean handleMouseClicked(double mouseX, double mouseY, int button) {
+        if (panelBounds().contains(mouseX, mouseY)) {
+            return false;
+        }
         List<OverlayModule> modules = visibleModules();
         for (int i = modules.size() - 1; i >= 0; i--) {
             OverlayModule m = modules.get(i);
@@ -242,7 +284,7 @@ public class OverlayEditScreen extends Screen {
             }
 
             nx = Math.max(0, Math.min(nx, width - dragged.getWidth()));
-            ny = Math.max(0, Math.min(ny, height - dragged.getHeight()));
+            ny = OverlayEditorLayout.clampDraggedY(ny, dragged.getHeight(), height);
             dragged.setPosition(nx, ny);
             return true;
         }
@@ -308,12 +350,26 @@ public class OverlayEditScreen extends Screen {
         updateButtons();
     }
 
+    private void toggleDock() {
+        dockExpanded = !dockExpanded;
+        profileMenuOpen = false;
+        rebuildWidgets();
+    }
+
+    private void setAllModulesEnabled(boolean enabled) {
+        ModuleEnabledState.setAll(overlay.getModules(), enabled);
+        if (!enabled) {
+            dragged = null;
+        }
+        OverlayConfig.save(overlay);
+    }
+
     private void updateButtons() {
         if (profileButton != null) {
-            profileButton.setMessage(currentProfileMessage());
+            profileButton.setLabel(currentProfileMessage());
         }
         if (hideDisabledButton != null) {
-            hideDisabledButton.setMessage(hideDisabledMessage());
+            hideDisabledButton.setLabel(hideDisabledMessage());
         }
     }
 
@@ -353,6 +409,10 @@ public class OverlayEditScreen extends Screen {
         return new CompactButton(x, y, width, BUTTON_HEIGHT, message, onPress);
     }
 
+    private IconButton iconButton(Component message, Identifier icon, int x, int y, Button.OnPress onPress) {
+        return new IconButton(x, y, message, icon, onPress);
+    }
+
     private boolean isShiftDown() {
         //? if >=26.1 {
         return InputConstants.isKeyDown(minecraft.getWindow(), InputConstants.KEY_LSHIFT)
@@ -372,6 +432,50 @@ public class OverlayEditScreen extends Screen {
     public void removed() {
         overlay.setEditMode(false);
         OverlayConfig.save(overlay);
+    }
+
+    private class IconButton extends Button {
+        private final Identifier icon;
+
+        private IconButton(int x, int y, Component message, Identifier icon, Button.OnPress onPress) {
+            super(
+                x,
+                y,
+                OverlayEditorLayout.ICON_BUTTON_SIZE,
+                OverlayEditorLayout.ICON_BUTTON_SIZE,
+                message,
+                onPress,
+                DEFAULT_NARRATION
+            );
+            this.icon = icon;
+            setTooltip(Tooltip.create(message));
+        }
+
+        private void setLabel(Component message) {
+            setMessage(message);
+            setTooltip(Tooltip.create(message));
+        }
+
+        @Override
+        //? if >=26.1 {
+        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+        //?} else {
+        /*protected void renderWidget(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+        *///?}
+            boolean hovered = isHoveredOrFocused();
+            int x = getX(), y = getY(), size = getWidth();
+            int background = active ? (hovered ? 0xFFFFFFFF : 0xFFD0D0D0) : 0xFF707070;
+
+            graphics.fill(x, y, x + size, y + size, background);
+            graphics.fill(x, y, x + size, y + 1, 0xFFFFFFFF);
+            graphics.fill(x, y, x + 1, y + size, 0xFFFFFFFF);
+            graphics.fill(x, y + size - 1, x + size, y + size, 0xFF555555);
+            graphics.fill(x + size - 1, y, x + size, y + size, 0xFF555555);
+            Compat.blitIcon(graphics, icon, x + 3, y + 3, size - 6);
+
+            //? if >=26.1
+            handleCursor(graphics);
+        }
     }
 
     private class CompactButton extends Button {
