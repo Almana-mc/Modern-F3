@@ -43,6 +43,7 @@ jobs:
       contents: read
     outputs:
       matrix: ${{ steps.targets.outputs.matrix }}
+      mod_id: ${{ steps.metadata.outputs.mod_id }}
       mod_name: ${{ steps.metadata.outputs.mod_name }}
       mod_version: ${{ steps.metadata.outputs.mod_version }}
       build_java: ${{ steps.metadata.outputs.build_java }}
@@ -79,8 +80,10 @@ jobs:
         id: metadata
         shell: bash
         run: |
+          mod_id="$(awk -F= '/^mod_id=/{print $2}' gradle.properties | tr -d '\r')"
           mod_name="$(awk -F= '/^mod_name=/{print $2}' gradle.properties | tr -d '\r')"
           mod_version="$(awk -F= '/^mod_version=/{print $2}' gradle.properties | tr -d '\r')"
+          echo "mod_id=$mod_id" >> "$GITHUB_OUTPUT"
           echo "mod_name=$mod_name" >> "$GITHUB_OUTPUT"
           echo "mod_version=$mod_version" >> "$GITHUB_OUTPUT"
           echo "build_java=25" >> "$GITHUB_OUTPUT"
@@ -122,6 +125,10 @@ jobs:
               raise SystemExit("No Stonecutter version projects were found.")
 
           mod_version = os.environ["MOD_VERSION"]
+          changelog = Path(f"CHANGELOGS/{mod_version}.md")
+          if not changelog.is_file():
+              raise SystemExit(f"Missing shared changelog: {changelog}")
+
           releases = []
           for minecraft_version, projects in sorted(targets.items()):
               projects.sort()
@@ -131,21 +138,12 @@ jobs:
               }
               if len(java_versions) != 1:
                   raise SystemExit(f"Inconsistent Java versions for Minecraft {minecraft_version}: {sorted(java_versions)}")
-              release_version = minecraft_version.rsplit(".", 1)[0] if minecraft_version.count(".") > 1 else minecraft_version
-              preferred_changelog = Path(f"CHANGELOGS/{release_version}-{mod_version}.md")
-              changelogs = sorted(Path("CHANGELOGS").glob(f"*-{mod_version}.md"))
-              if preferred_changelog.exists():
-                  changelog = preferred_changelog
-              elif len(changelogs) == 1:
-                  changelog = changelogs[0]
-              else:
-                  raise SystemExit(f"Missing changelog for Minecraft {minecraft_version}. Add {preferred_changelog} or one shared *-{mod_version}.md file.")
 
               releases.append({
                   "minecraft_version": minecraft_version,
                   "release_tag": f"{minecraft_version}-{mod_version}",
                   "build_tasks": " ".join(f":{project}:build" for project, _ in projects),
-                  "loaders": "\\n".join(loader for _, loader in projects),
+                  "loaders": "\n".join(loader for _, loader in projects),
                   "changelog_file": str(changelog),
                   "java_version": java_versions.pop(),
               })
@@ -157,14 +155,15 @@ jobs:
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           echo "release_tags=$release_tags" >> "$GITHUB_OUTPUT"
 
-  release:
-    name: Release ${{ matrix.minecraft_version }}
+  build-releases:
+    name: Build ${{ matrix.minecraft_version }}
     needs: prepare-release
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix: ${{ fromJSON(needs.prepare-release.outputs.matrix) }}
     steps:
       - name: Checkout
@@ -188,15 +187,62 @@ jobs:
           BUILD_TASKS: ${{ matrix.build_tasks }}
         run: ./gradlew -Dorg.gradle.java.home="$JAVA_HOME" $BUILD_TASKS -x copyjar --console=plain
 
+      - name: Stage release artifacts
+        shell: bash
+        env:
+          LOADERS: ${{ matrix.loaders }}
+          MINECRAFT_VERSION: ${{ matrix.minecraft_version }}
+          MOD_ID: ${{ needs.prepare-release.outputs.mod_id }}
+          MOD_VERSION: ${{ needs.prepare-release.outputs.mod_version }}
+        run: |
+          mkdir release-files
+          for loader in $LOADERS; do
+            artifact="versions/$MINECRAFT_VERSION-$loader/build/libs/$MOD_ID-$loader-$MINECRAFT_VERSION-$MOD_VERSION.jar"
+            if [[ ! -f "$artifact" ]]; then
+              echo "Missing release artifact: $artifact"
+              exit 1
+            fi
+            cp "$artifact" release-files/
+          done
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.minecraft_version }}
+          path: release-files/*.jar
+          if-no-files-found: error
+          retention-days: 1
+
+  release:
+    name: Release ${{ matrix.minecraft_version }}
+    needs: [prepare-release, build-releases]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.prepare-release.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-${{ matrix.minecraft_version }}
+          path: release-files
+
       - name: Publish release
         id: publish
-        uses: Kira-NT/mc-publish@v3.3.0
+        uses: Kira-NT/mc-publish@v3.3.1
         with:
           name: ${{ needs.prepare-release.outputs.mod_name }} - ${{ matrix.release_tag }}
           version: ${{ matrix.release_tag }}
-          files: versions/${{ matrix.minecraft_version }}-*/build/libs/*.jar
+          files: release-files/*.jar
           changelog-file: ${{ matrix.changelog_file }}
           loaders: ${{ matrix.loaders }}
+          environment: client
           game-versions: ${{ matrix.minecraft_version }}
           game-version-filter: none
           java: ${{ matrix.java_version }}
