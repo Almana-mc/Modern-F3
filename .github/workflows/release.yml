@@ -43,6 +43,7 @@ jobs:
       contents: read
     outputs:
       matrix: ${{ steps.targets.outputs.matrix }}
+      curseforge_matrix: ${{ steps.targets.outputs.curseforge_matrix }}
       mod_id: ${{ steps.metadata.outputs.mod_id }}
       mod_name: ${{ steps.metadata.outputs.mod_name }}
       mod_version: ${{ steps.metadata.outputs.mod_version }}
@@ -107,7 +108,7 @@ jobs:
           MOD_VERSION: ${{ steps.metadata.outputs.mod_version }}
         run: |
           projects="$(./gradlew -Dorg.gradle.java.home="$JAVA_HOME" projects --console=plain -q 2>&1)"
-          matrix="$(python3 -c '
+          python3 -c '
           import json
           import os
           import re
@@ -130,6 +131,7 @@ jobs:
               raise SystemExit(f"Missing shared changelog: {changelog}")
 
           releases = []
+          curseforge_releases = []
           for minecraft_version, projects in sorted(targets.items()):
               projects.sort()
               java_versions = {
@@ -139,21 +141,29 @@ jobs:
               if len(java_versions) != 1:
                   raise SystemExit(f"Inconsistent Java versions for Minecraft {minecraft_version}: {sorted(java_versions)}")
 
+              java_version = java_versions.pop()
+              loaders = [loader for _, loader in projects]
+              release_tag = f"{minecraft_version}-{mod_version}"
               releases.append({
                   "minecraft_version": minecraft_version,
-                  "release_tag": f"{minecraft_version}-{mod_version}",
+                  "release_tag": release_tag,
                   "build_tasks": " ".join(f":{project}:build" for project, _ in projects),
-                  "loaders": "\n".join(loader for _, loader in projects),
+                  "loaders": "\n".join(loaders),
                   "changelog_file": str(changelog),
-                  "java_version": java_versions.pop(),
+                  "java_version": java_version,
               })
+              curseforge_releases.extend({
+                  "minecraft_version": minecraft_version,
+                  "release_tag": release_tag,
+                  "loader": loader,
+                  "changelog_file": str(changelog),
+                  "java_version": java_version,
+              } for loader in loaders)
 
-          print(json.dumps({"include": releases}, separators=(",", ":")))
-          ' <<< "$projects")"
-
-          release_tags="$(python3 -c 'import json, sys; print(", ".join(item["release_tag"] for item in json.load(sys.stdin)["include"]))' <<< "$matrix")"
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-          echo "release_tags=$release_tags" >> "$GITHUB_OUTPUT"
+          print("matrix=" + json.dumps({"include": releases}, separators=(",", ":")))
+          print("curseforge_matrix=" + json.dumps({"include": curseforge_releases}, separators=(",", ":")))
+          print("release_tags=" + ", ".join(item["release_tag"] for item in releases))
+          ' <<< "$projects" >> "$GITHUB_OUTPUT"
 
   build-releases:
     name: Build ${{ matrix.minecraft_version }}
@@ -233,8 +243,9 @@ jobs:
           name: release-${{ matrix.minecraft_version }}
           path: release-files
 
-      - name: Publish release
+      - name: Publish GitHub and Modrinth
         id: publish
+        if: needs.prepare-release.outputs.publish_github == 'true' || needs.prepare-release.outputs.publish_modrinth == 'true'
         uses: Kira-NT/mc-publish@v3.3.1
         with:
           name: ${{ needs.prepare-release.outputs.mod_name }} - ${{ matrix.release_tag }}
@@ -251,13 +262,47 @@ jobs:
           github-commitish: ${{ github.sha }}
           modrinth-id: ${{ needs.prepare-release.outputs.publish_modrinth == 'true' && vars.MODRINTH_PROJECT_ID || '' }}
           modrinth-token: ${{ needs.prepare-release.outputs.publish_modrinth == 'true' && secrets.TOKEN_MODRINTH || '' }}
-          curseforge-id: ${{ needs.prepare-release.outputs.publish_curseforge == 'true' && vars.CURSEFORGE_PROJECT_ID || '' }}
-          curseforge-token: ${{ needs.prepare-release.outputs.publish_curseforge == 'true' && secrets.TOKEN_CURSEFORGE || '' }}
+
+  release-curseforge:
+    name: Release ${{ matrix.minecraft_version }} ${{ matrix.loader }} to CurseForge
+    needs: [prepare-release, build-releases]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.prepare-release.outputs.curseforge_matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-${{ matrix.minecraft_version }}
+          path: release-files
+
+      - name: Publish CurseForge file
+        if: needs.prepare-release.outputs.publish_curseforge == 'true'
+        uses: Kira-NT/mc-publish@v3.3.1
+        with:
+          name: ${{ needs.prepare-release.outputs.mod_name }} - ${{ matrix.release_tag }}
+          version: ${{ matrix.release_tag }}
+          files: release-files/${{ needs.prepare-release.outputs.mod_id }}-${{ matrix.loader }}-${{ matrix.minecraft_version }}-${{ needs.prepare-release.outputs.mod_version }}.jar
+          changelog-file: ${{ matrix.changelog_file }}
+          loaders: ${{ matrix.loader }}
+          environment: client
+          game-versions: ${{ matrix.minecraft_version }}
+          game-version-filter: none
+          java: ${{ matrix.java_version }}
+          curseforge-id: ${{ vars.CURSEFORGE_PROJECT_ID }}
+          curseforge-token: ${{ secrets.TOKEN_CURSEFORGE }}
 
   notify-discord:
     name: Notify Discord
-    needs: [prepare-release, release]
-    if: always() && needs.prepare-release.outputs.publish_discord == 'true' && needs.release.result == 'success'
+    needs: [prepare-release, release, release-curseforge]
+    if: always() && needs.prepare-release.outputs.publish_discord == 'true' && needs.release.result == 'success' && needs.release-curseforge.result == 'success'
     runs-on: ubuntu-latest
     env:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
